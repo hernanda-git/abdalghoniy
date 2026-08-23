@@ -38,7 +38,7 @@ def make_status(root: Path = ROOT) -> dict:
             {'gate': 'purged_cv', 'status': 'implemented_not_passed'},
             {'gate': 'deflated_metric', 'status': 'not_passed'},
             {'gate': 'walk_forward', 'status': 'not_passed'},
-            {'gate': 'shadow', 'status': 'blocked_no_live_stream'},
+            {'gate': 'shadow', 'status': 'implemented_no_live_stream'},
             {'gate': 'micro_live', 'status': 'blocked_no_credentials'},
         ],
         'strategies': {'counter_trend_scalp': 'paper-only', 'funding_carry': 'paper-only', 'mean_reversion': 'paper-only'},

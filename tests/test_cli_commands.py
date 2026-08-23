@@ -41,6 +41,19 @@ def write_dataset(path: Path) -> None:
         ])
 
 
+def test_shadow_command_persists_zero_order_events(tmp_path):
+    dataset = tmp_path / "candles.csv"
+    write_dataset(dataset)
+    result = subprocess.run([
+        sys.executable, "-m", "abdalghoniy", "shadow", "--symbol", "BTCUSDT", "--input", str(dataset),
+        "--event-path", str(tmp_path / "events.jsonl"),
+    ], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["would_orders"] == 0
+    assert payload["events"] == 3
+
+
 def test_replay_and_report_commands(tmp_path):
     dataset = tmp_path / "candles.csv"
     write_dataset(dataset)

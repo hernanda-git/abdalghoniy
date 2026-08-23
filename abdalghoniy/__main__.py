@@ -14,6 +14,7 @@ from .fees import CostModel
 from .ledger import DurableLedger
 from .strategies import CounterTrendConfig
 from .validation import evaluate_replay
+from .shadow import ShadowRunner
 
 
 def _decimal(value: Decimal) -> str:
@@ -91,6 +92,22 @@ def _replay(args, cfg: AppConfig) -> int:
     return 0
 
 
+def _shadow(args) -> int:
+    dataset = load_csv(args.input)
+    runner = ShadowRunner(args.symbol, args.event_path)
+    results = []
+    for index, candle in enumerate(dataset.candles):
+        timestamp = dataset.timestamps[index]
+        try:
+            from datetime import datetime
+            timestamp_value = datetime.fromisoformat(timestamp.replace("Z", "+00:00")).timestamp()
+        except (ValueError, TypeError):
+            timestamp_value = float(index)
+        results.append(runner.process({"timestamp": timestamp_value, "price": str(candle.close), "volume": str(candle.volume)}))
+    print(json.dumps({"symbol": args.symbol, "events": len(results), "would_orders": sum(1 for result in results if result["would_order"]), "statuses": {status: sum(1 for result in results if result["status"] == status) for status in sorted({result["status"] for result in results})}, "event_path": str(args.event_path)}, indent=2))
+    return 0
+
+
 def _report(args) -> int:
     path = args.output_dir / "latest.json"
     if not path.exists():
@@ -115,12 +132,18 @@ def main(argv=None) -> int:
     report = sub.add_parser("report", help="print the latest paper replay report")
     report.add_argument("--latest", action="store_true", required=True)
     report.add_argument("--output-dir", type=Path, default=Path("reports/latest"))
+    shadow = sub.add_parser("shadow", help="process market data without any order path")
+    shadow.add_argument("--symbol", required=True)
+    shadow.add_argument("--input", type=Path, required=True)
+    shadow.add_argument("--event-path", type=Path, required=True)
     args = parser.parse_args(argv)
     cfg = AppConfig.from_yaml(args.config)
     if args.command == "replay":
         return _replay(args, cfg)
     if args.command == "report":
         return _report(args)
+    if args.command == "shadow":
+        return _shadow(args)
     if args.status:
         print(json.dumps({"config": {"mode": cfg.mode, "max_leverage": str(cfg.max_leverage), "max_drawdown": str(cfg.max_drawdown), "max_position_notional": str(cfg.max_position_notional)}, "status": make_status(Path.cwd())}, indent=2))
     else:
