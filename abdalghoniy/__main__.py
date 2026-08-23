@@ -15,6 +15,7 @@ from .ledger import DurableLedger
 from .strategies import CounterTrendConfig
 from .validation import evaluate_replay
 from .shadow import ShadowRunner
+from .live_shadow import LiveDemoShadow
 
 
 def _decimal(value: Decimal) -> str:
@@ -108,6 +109,18 @@ def _shadow(args) -> int:
     return 0
 
 
+def _live_shadow(args) -> int:
+    import time
+    runner = LiveDemoShadow(args.symbol, args.event_path)
+    results = []
+    for index in range(args.iterations):
+        results.append(runner.poll_once())
+        if index + 1 < args.iterations and args.sleep > 0:
+            time.sleep(args.sleep)
+    print(json.dumps({"symbol": args.symbol, "iterations": len(results), "would_orders": sum(1 for result in results if result.get("would_order")), "statuses": {status: sum(1 for result in results if result.get("status") == status) for status in sorted({result.get("status") for result in results})}, "event_path": str(args.event_path)}, indent=2))
+    return 0
+
+
 def _report(args) -> int:
     path = args.output_dir / "latest.json"
     if not path.exists():
@@ -136,6 +149,11 @@ def main(argv=None) -> int:
     shadow.add_argument("--symbol", required=True)
     shadow.add_argument("--input", type=Path, required=True)
     shadow.add_argument("--event-path", type=Path, required=True)
+    live_shadow = sub.add_parser("live-shadow", help="poll public Bitget SUSDT-FUTURES candles without orders")
+    live_shadow.add_argument("--symbol", required=True)
+    live_shadow.add_argument("--event-path", type=Path, required=True)
+    live_shadow.add_argument("--iterations", type=int, default=1)
+    live_shadow.add_argument("--sleep", type=float, default=1.0)
     args = parser.parse_args(argv)
     cfg = AppConfig.from_yaml(args.config)
     if args.command == "replay":
@@ -144,6 +162,8 @@ def main(argv=None) -> int:
         return _report(args)
     if args.command == "shadow":
         return _shadow(args)
+    if args.command == "live-shadow":
+        return _live_shadow(args)
     if args.status:
         print(json.dumps({"config": {"mode": cfg.mode, "max_leverage": str(cfg.max_leverage), "max_drawdown": str(cfg.max_drawdown), "max_position_notional": str(cfg.max_position_notional)}, "status": make_status(Path.cwd())}, indent=2))
     else:
