@@ -13,3 +13,15 @@ The Linux implementation path for this session is `/root/abdalghoniy`. The suppl
 - Secrets are environment-only.
 
 Run tests with `python3 -m pytest -q`.
+
+## Monitoring deployment
+
+The paper-only dashboard is deployed at [ag.warga-digital.com](https://ag.warga-digital.com/). It exposes only health, public market data, safety state, validation state, and reports. It does not expose credentials, order controls, or live trading.
+
+On the VPS:
+
+- `abdalghoniy-dashboard.service` serves the dashboard on `127.0.0.1:8787`.
+- `abdalghoniy-verify.timer` runs the offline test suite every 15 minutes and updates an ignored status marker.
+- Nginx terminates HTTPS for `ag.warga-digital.com` using a Let's Encrypt certificate.
+
+The project remains `paper` mode. Missing validation evidence, live shadow data, exchange credentials, venue behavior drills, and micro-live approval are intentionally surfaced as blocked, not hidden.
