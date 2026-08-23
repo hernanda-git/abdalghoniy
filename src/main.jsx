@@ -11,9 +11,9 @@ function formatTime(value) { return value ? jakarta.format(new Date(value)) : 'U
 function formatPrice(value) { return value == null || Number.isNaN(Number(value)) ? 'Unavailable' : number.format(Number(value)); }
 function formatBytes(value) { if (value == null) return 'Unavailable'; const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']; let n = Number(value); let i = 0; while (n >= 1024 && i < units.length - 1) { n /= 1024; i += 1; } return `${n.toFixed(i ? 1 : 0)} ${units[i]}`; }
 function chartGeometry(values) {
-  const nums = values.map(Number).filter(Number.isFinite);
-  if (nums.length < 2) return { nums, points: '', min: null, max: null, latest: null };
   const width = 320; const height = 180; const left = 42; const right = 10; const top = 14; const bottom = 34;
+  const nums = values.map(Number).filter(Number.isFinite);
+  if (nums.length < 2) return { nums, points: '', min: null, max: null, latest: null, width, height, left, right, top, bottom, range: 1 };
   const min = Math.min(...nums); const max = Math.max(...nums); const range = max - min || Math.max(Math.abs(max) * 0.05, 1);
   const points = nums.map((value, index) => `${left + (index / (nums.length - 1)) * (width - left - right)},${top + ((max - value) / range) * (height - top - bottom)}`).join(' ');
   return { nums, points, min, max, latest: nums.at(-1), width, height, left, right, top, bottom, range };
