@@ -17,9 +17,12 @@ Run tests with `python3 -m pytest -q`. Run the paper-only composition root with 
 ```bash
 python3 -m abdalghoniy replay --symbol BTCUSDT --interval 1m
 python3 -m abdalghoniy report --latest
+python3 -m abdalghoniy live-shadow --symbol BTCUSDT --iterations 10 --sleep 60 --event-path /var/tmp/abdalghoniy-shadow.jsonl
 ```
 
-When `--input` is omitted, the replay fetches public Bitget `SUSDT-FUTURES` demo candles and stores the ignored CSV under `data/`. An existing CSV can be supplied with `--input` for reproducible offline replay.
+`live-shadow` polls public Bitget `SUSDT-FUTURES` demo candles only. It records raw and normalized events, reports stale or duplicate data, and always reports `would_orders: 0`. It does not load credentials and has no order endpoint.
+
+When `--input` is omitted, replay fetches public Bitget `SUSDT-FUTURES` demo candles and stores the ignored CSV under `data/`. An existing CSV can be supplied with `--input` for reproducible offline replay.
 
 ## Monitoring deployment
 
