@@ -92,6 +92,29 @@ def _ordered(candles: Sequence[DailyCandle]) -> list[DailyCandle]:
     return sorted(result, key=lambda item: item.timestamp)
 
 
+def calendar_range(candles: Sequence[DailyCandle], period: str) -> AnalysisResult[PeriodRange | None]:
+    """Aggregate observed candles into one explicit calendar period."""
+    if period not in {"week", "month", "year"}:
+        raise ValueError("period must be 'week', 'month', or 'year'")
+    rows = _ordered(candles)
+    if not rows:
+        return AnalysisResult(None, False, "no candles supplied")
+    target = rows[-1].timestamp.date()
+    if period == "week":
+        start = target.fromordinal(target.toordinal() - target.weekday())
+        end = date.fromordinal(start.toordinal() + 6)
+    elif period == "month":
+        start = date(target.year, target.month, 1)
+        end = date(target.year, target.month, calendar.monthrange(target.year, target.month)[1])
+    else:
+        start = date(target.year, 1, 1)
+        end = date(target.year, 12, 31)
+    selected = [row for row in rows if start <= row.timestamp.date() <= end]
+    if not selected:
+        return AnalysisResult(None, False, f"no candles observed for {period} {target.year}")
+    return AnalysisResult(PeriodRange(start, end, selected[0].open, max(x.high for x in selected), min(x.low for x in selected), selected[-1].close, sum((x.volume for x in selected), Decimal("0")), len(selected)), True)
+
+
 def period_ranges(candles: Sequence[DailyCandle], period: str) -> list[PeriodRange]:
     """Aggregate observed candles into calendar weeks or calendar months.
 

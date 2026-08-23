@@ -11,10 +11,11 @@ from datetime import datetime, date, timezone
 from decimal import Decimal
 from threading import Lock
 
-from .analytics import DailyCandle, period_ranges, pivot_clusters, rsi, smc_events
+from .analytics import DailyCandle, calendar_range, period_ranges, pivot_clusters, rsi, smc_events
 from .liquidations import PublicLiquidationHeatmapClient
 from .market_data import MarketDataCache, PublicBitgetMarketData
 from .market_depth import OrderBookAggregator
+from .multi_exchange import PublicBybitClient, PublicHyperliquidClient, PublicMexcClient, SourceResult, SourceRouter
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB_ROOT = ROOT / 'web'
@@ -86,8 +87,35 @@ def _candle_rows(raw: list) -> list[DailyCandle]:
     for row in raw:
         if len(row) < 6:
             continue
-        rows.append(DailyCandle(datetime.fromtimestamp(int(row[0]) / 1000, timezone.utc), row[1], row[2], row[3], row[4], row[5]))
+        timestamp = int(row[0])
+        if timestamp < 10_000_000_000:
+            timestamp *= 1000
+        rows.append(DailyCandle(datetime.fromtimestamp(timestamp / 1000, timezone.utc), row[1], row[2], row[3], row[4], row[5]))
     return rows
+
+
+def _pooled_daily(symbol: str = "BTCUSDT") -> tuple[str, list[DailyCandle], list[dict]]:
+    hyperliquid = PublicHyperliquidClient()
+    bybit = PublicBybitClient()
+    mexc = PublicMexcClient()
+    bitget = PublicBitgetMarketData()
+    attempts: list[dict] = []
+    def attempt(name: str, callback):
+        result = callback()
+        attempts.append({"source": result.source, "available": result.available, "method": result.method, "error": result.error, "rows": len(result.rows)})
+        if not result.available:
+            raise RuntimeError(result.error or "unavailable")
+        return result.rows
+    def bitget_attempt():
+        result = bitget.candles(symbol, granularity="1D", limit=365)
+        return SourceResult("Bitget", result.data or [], "GET /api/v2/mix/market/candles", not result.metadata.unavailable, result.metadata.error)
+    source, raw = SourceRouter([
+        ("Hyperliquid", lambda: attempt("Hyperliquid", lambda: hyperliquid.daily(symbol.removesuffix("USDT")))),
+        ("Bybit", lambda: attempt("Bybit", lambda: bybit.daily(symbol))),
+        ("MEXC", lambda: attempt("MEXC", lambda: mexc.daily(symbol.replace("USDT", "_USDT")))),
+        ("Bitget", lambda: attempt("Bitget", bitget_attempt)),
+    ]).fetch()
+    return source, _candle_rows(raw), attempts
 
 
 def _result_payload(result: Any) -> dict:
@@ -98,29 +126,29 @@ def intelligence_snapshot(symbol: str = "BTCUSDT") -> dict:
     """Return one cached, read-only intelligence snapshot for the demo instrument."""
     with _INTELLIGENCE_LOCK:
         def fetch() -> dict:
-            client = PublicBitgetMarketData()
-            candles_result = client.candles(symbol, granularity="1D", limit=100)
-            metadata = candles_result.metadata
-            rows = _candle_rows(candles_result.data or []) if candles_result.data else []
+            source, rows, attempts = _pooled_daily(symbol)
             weekly = period_ranges(rows, "week") if rows else []
             monthly = period_ranges(rows, "month") if rows else []
+            yearly = calendar_range(rows, "year") if rows else None
             pivots = pivot_clusters(rows, left=2, right=2) if rows else None
             rsi_result = rsi(rows, period=14) if rows else None
             smc = smc_events(rows, left=2, right=2) if rows else None
-            depth_result = client.depth(symbol, limit=20)
+            depth_result = PublicBitgetMarketData().depth(symbol, limit=20)
             order_book = OrderBookAggregator.from_bitget(depth_result.data or {}) if depth_result.data else {"status": "unavailable", "error": depth_result.metadata.error or "no_depth"}
             if hasattr(order_book, "__dict__"):
                 order_book = dict(order_book.__dict__)
+            updated_at = int(rows[-1].timestamp.timestamp() * 1000) if rows else None
             return {
-                "symbol": getattr(client, "venue_symbol", lambda value: value)(symbol),
-                "ranges": {"weekly": [r.__dict__ for r in weekly], "monthly": [r.__dict__ for r in monthly], "period_semantics": "observed candles grouped by Monday-Sunday week and calendar month"},
-                "rsi": _result_payload(rsi_result) if rsi_result else {"available": False, "value": None, "reason": "no daily candles"},
+                "symbol": getattr(PublicBitgetMarketData, "venue_symbol", lambda value: value)(symbol),
+                "ranges": {"weekly": [r.__dict__ for r in weekly], "monthly": [r.__dict__ for r in monthly], "yearly": _result_payload(yearly) if yearly else {"available": False, "value": None, "reason": "no daily candles"}, "period_semantics": "observed candles grouped by Monday-Sunday week, calendar month, and calendar year"},
                 "support_resistance": _result_payload(pivots) if pivots else {"available": False, "value": [], "reason": "no daily candles"},
+                "rsi": _result_payload(rsi_result) if rsi_result else {"available": False, "value": None, "reason": "no daily candles"},
                 "smc": _result_payload(smc) if smc else {"available": False, "value": [], "reason": "no daily candles"},
                 "order_book": order_book,
                 "liquidations": dict(PublicLiquidationHeatmapClient().fetch(symbol).__dict__),
-                "freshness": {"updated_at_ms": metadata.updated_at_ms, "freshness_ms": metadata.freshness_ms, "stale": metadata.stale, "source": metadata.source, "method": metadata.method},
-                "rate_limit": metadata.rate_limit,
+                "freshness": {"updated_at_ms": updated_at, "freshness_ms": None, "stale": False, "source": source, "method": "rate-budgeted sequential source failover"},
+                "source_attempts": attempts,
+                "rate_limit": {"policy": "one sequential request per source per refresh; local per-exchange budgets; no credentialed calls"},
             }
         return _INTELLIGENCE_CACHE.get_or_fetch(f"intelligence:{symbol}", fetch, ttl_ms=5000)
 
