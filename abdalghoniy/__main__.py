@@ -11,7 +11,9 @@ from .config import AppConfig
 from .data import fetch_demo_candles, load_csv
 from .dashboard import make_status
 from .fees import CostModel
+from .ledger import DurableLedger
 from .strategies import CounterTrendConfig
+from .validation import evaluate_replay
 
 
 def _decimal(value: Decimal) -> str:
@@ -74,6 +76,16 @@ def _replay(args, cfg: AppConfig) -> int:
         "validation": {"status": "research_only", "lookahead_review": "not_passed", "purged_cv": "not_passed", "walk_forward": "not_passed"},
     }
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    ledger_path = args.output_dir / "ledger.sqlite3"
+    ledger = DurableLedger(ledger_path)
+    for trade in trades:
+        gross_trade = (trade.entry - trade.exit) * trade.quantity if trade.direction == "short" else (trade.exit - trade.entry) * trade.quantity
+        ledger.record_trade({"symbol": args.symbol, "direction": trade.direction, "entry": trade.entry, "exit": trade.exit, "quantity": trade.quantity, "gross": gross_trade, "net": trade.net, "funding": trade.funding})
+    starting_equity = Decimal("1000")
+    ledger.record_equity(starting_equity + net, max(Decimal("0"), -net / starting_equity))
+    ledger.close()
+    payload["ledger_path"] = str(ledger_path)
+    payload["validation"] = evaluate_replay([trade.net for trade in trades], len(dataset.candles))
     (args.output_dir / "latest.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(payload, indent=2))
     return 0

@@ -1,7 +1,6 @@
 import json
 from dataclasses import dataclass
 from decimal import Decimal
-from math import floor
 from typing import List, Tuple
 
 
@@ -21,13 +20,13 @@ class ValidationLadder:
     def authorize(self, gates: List[GateResult]) -> bool:
         if len(gates) != 6 or not all(g.passed and g.name == expected for g, expected in zip(gates, self.names)):
             return False
-        required = {'dataset_hash', 'evaluated_at', 'code_hash', 'metric'}
+        required = {"dataset_hash", "evaluated_at", "code_hash", "metric"}
         for gate in gates:
             try:
                 evidence = json.loads(gate.detail)
             except (TypeError, json.JSONDecodeError):
                 return False
-            if not required.issubset(evidence) or not all(evidence[k] not in ('', None) for k in required):
+            if not required.issubset(evidence) or not all(evidence[k] not in ("", None) for k in required):
                 return False
         return True
 
@@ -54,3 +53,24 @@ def wilson_lower_bound(wins: int, trials: int, z: Decimal = Decimal("1.96")) -> 
     centre = p + zz / (Decimal(2) * Decimal(trials))
     spread = z * ((p * (Decimal(1) - p) / Decimal(trials) + zz / (Decimal(4) * Decimal(trials) ** 2)).sqrt())
     return (centre - spread) / denom
+
+
+def evaluate_replay(returns, sample_count: int) -> dict:
+    """Produce conservative, executable validation evidence from realized returns."""
+    values = [Decimal(str(value)) for value in returns]
+    trade_count = len(values)
+    wins = sum(1 for value in values if value > 0)
+    lower = wilson_lower_bound(wins, trade_count) if trade_count else Decimal("0")
+    splits = purged_splits(sample_count) if sample_count >= 5 else []
+    enough = trade_count >= 30
+    return {
+        "status": "research_only" if enough else "insufficient_evidence",
+        "trade_count": trade_count,
+        "mean_return": str(sum(values, Decimal("0")) / Decimal(trade_count)) if values else None,
+        "purged_cv": {"status": "not_passed" if not enough else "implemented_not_passed", "folds": len(splits), "purge": 1, "embargo": 1},
+        "deflated_metric": {"status": "not_passed", "reason": "requires multiple tested configurations and sufficient trades"},
+        "walk_forward": {"status": "not_passed" if not enough else "implemented_not_passed", "test_fraction": "0.30"},
+        "confidence_interval": {"wins": wins, "trials": trade_count, "wilson_lower_win_rate": str(lower), "positive_lower_bound": bool(enough and lower > Decimal("0.5"))},
+        "random_control": {"status": "not_passed" if not enough else "implemented_not_passed", "reason": "matched random-entry replay is required before promotion"},
+        "multi_symbol_window": {"status": "not_passed", "reason": "requires independent symbol and window datasets"},
+    }
