@@ -1,6 +1,9 @@
 import json
 import os
 import re
+import shutil
+import sqlite3
+import time
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -60,6 +63,77 @@ def make_status(root: Path = ROOT) -> dict:
         'strategies': {'counter_trend_scalp': 'paper-only', 'funding_carry': 'paper-only', 'mean_reversion': 'paper-only'},
         'reports': ['/reports/P0.md', '/reports/P1.md', '/reports/P2-P4.md', '/reports/REVIEW.md'],
     }
+
+
+_HEALTH_CACHE = MarketDataCache()
+
+
+def _read_meminfo() -> dict[str, int]:
+    values = {}
+    try:
+        for line in Path('/proc/meminfo').read_text().splitlines():
+            key, raw = line.split(':', 1)
+            values[key] = int(raw.strip().split()[0]) * 1024
+    except (OSError, ValueError):
+        return {}
+    return values
+
+
+def _database_inventory() -> list[dict]:
+    output = []
+    for path in ROOT.rglob('*'):
+        if not path.is_file() or path.suffix not in {'.db', '.sqlite', '.sqlite3'}:
+            continue
+        entry = {'path': str(path.relative_to(ROOT)), 'bytes': path.stat().st_size, 'tables': []}
+        try:
+            with sqlite3.connect(path) as db:
+                tables = [row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
+                for table in tables:
+                    count = db.execute(f'SELECT COUNT(*) FROM "{table.replace(chr(34), chr(34) * 2)}"').fetchone()[0]
+                    entry['tables'].append({'name': table, 'rows': count})
+        except (OSError, sqlite3.Error) as exc:
+            entry['error'] = type(exc).__name__
+        output.append(entry)
+    return output
+
+
+def _project_size() -> int:
+    total = 0
+    for path in ROOT.rglob('*'):
+        try:
+            if path.is_file():
+                total += path.stat().st_size
+        except OSError:
+            continue
+    return total
+
+
+def health_snapshot() -> dict:
+    def collect() -> dict:
+        disk = shutil.disk_usage(ROOT)
+        mem = _read_meminfo()
+        rss = 0
+        try:
+            for line in Path('/proc/self/status').read_text().splitlines():
+                if line.startswith('VmRSS:'):
+                    rss = int(line.split()[1]) * 1024
+                    break
+        except (OSError, ValueError):
+            pass
+        try:
+            load = list(os.getloadavg())
+        except OSError:
+            load = []
+        return {
+            'project': {'path': str(ROOT), 'bytes': _project_size()},
+            'databases': _database_inventory(),
+            'process': {'rss_bytes': rss, 'pid': os.getpid()},
+            'host': {'cpu_count': os.cpu_count(), 'uptime_seconds': int(float(Path('/proc/uptime').read_text().split()[0])) if Path('/proc/uptime').exists() else None, 'load_1m': load[0] if load else None, 'load_5m': load[1] if len(load) > 1 else None, 'load_15m': load[2] if len(load) > 2 else None, 'memory_total_bytes': mem.get('MemTotal'), 'memory_available_bytes': mem.get('MemAvailable'), 'swap_total_bytes': mem.get('SwapTotal'), 'swap_free_bytes': mem.get('SwapFree')},
+            'disk': {'mount': str(ROOT), 'total_bytes': disk.total, 'used_bytes': disk.total - disk.free, 'free_bytes': disk.free},
+            'safety': {'mode': 'paper', 'live_orders_enabled': False, 'credentialed_requests': False},
+            'generated_at_ms': int(time.time() * 1000),
+        }
+    return _HEALTH_CACHE.get_or_fetch('health', collect, ttl_ms=10000)
 
 
 _MARKET_CACHE = MarketDataCache()
@@ -177,6 +251,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, b'{"ok":true}', 'application/json')
         elif path == '/api/status':
             self._send(200, json.dumps(safe_json(make_status())).encode(), 'application/json')
+        elif path == '/api/health':
+            self._send(200, json.dumps(safe_json(health_snapshot())).encode(), 'application/json')
         elif path == '/api/intelligence':
             self._send(200, json.dumps(safe_json(intelligence_snapshot())).encode(), 'application/json')
         elif path == '/api/market':
