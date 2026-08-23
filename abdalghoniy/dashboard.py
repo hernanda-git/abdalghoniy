@@ -47,13 +47,19 @@ def make_status(root: Path = ROOT) -> dict:
 
 
 def market_snapshot() -> dict:
-    url = 'https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT'
+    # Demo-only public market data. The symbol is deliberately the SUSDT demo
+    # instrument, never the live USDT-FUTURES product.
+    url = 'https://api.bitget.com/api/v2/mix/market/tickers?productType=SUSDT-FUTURES'
     try:
         with urllib.request.urlopen(url, timeout=5) as response:
-            data = json.load(response)
-        return {'source': 'Binance public ticker', 'symbol': data.get('symbol'), 'price': data.get('price'), 'ok': True}
+            payload = json.load(response)
+        rows = payload.get('data') or []
+        row = next((item for item in rows if item.get('symbol') == 'SBTCSUSDT'), rows[0] if rows else None)
+        if not row:
+            return {'source': 'Bitget SUSDT-FUTURES public ticker', 'ok': False, 'error': 'NoDemoTicker'}
+        return {'source': 'Bitget SUSDT-FUTURES public ticker', 'symbol': row.get('symbol'), 'price': row.get('lastPr'), 'ok': True}
     except Exception as exc:
-        return {'source': 'Binance public ticker', 'ok': False, 'error': type(exc).__name__}
+        return {'source': 'Bitget SUSDT-FUTURES public ticker', 'ok': False, 'error': type(exc).__name__}
 
 
 class Handler(BaseHTTPRequestHandler):
