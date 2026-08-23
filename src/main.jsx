@@ -7,6 +7,8 @@ const API = { status: '/api/status', market: '/api/market', intelligence: '/api/
 const jakarta = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 const number = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 
+function formatTime(value) { return value ? jakarta.format(new Date(value)) : 'Unavailable'; }
+function formatPrice(value) { return value == null || Number.isNaN(Number(value)) ? 'Unavailable' : number.format(Number(value)); }
 function formatBytes(value) { if (value == null) return 'Unavailable'; const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']; let n = Number(value); let i = 0; while (n >= 1024 && i < units.length - 1) { n /= 1024; i += 1; } return `${n.toFixed(i ? 1 : 0)} ${units[i]}`; }
 function chartPointsFor(values) { if (values.length < 2) return ''; const nums = values.map(Number); const min = Math.min(...nums); const max = Math.max(...nums); const range = max - min || 1; return nums.map((value, index) => `${(index / (nums.length - 1)) * 100},${92 - ((value - min) / range) * 78}`).join(' '); }
 function LiveChart({ eyebrow, title, values, color = 'var(--green)', source }) { const points = chartPointsFor(values); return <article className="surface chart-card"><SectionHeading eyebrow={eyebrow} title={title} action={<Badge tone="green">REST LIVE</Badge>} /><svg className="live-chart" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label={title}><polyline points={points || '0,80 25,60 50,70 75,40 100,50'} style={{ stroke: color }} /></svg><SourceLine source={source ?? 'Live REST pool'} method="Sampled dashboard history" freshness={values.length ? 'current session' : 'waiting'} /></article>; }
