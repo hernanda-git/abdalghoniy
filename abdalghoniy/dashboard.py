@@ -62,7 +62,14 @@ def make_status(root: Path = ROOT) -> dict:
     }
 
 
+_MARKET_CACHE = MarketDataCache()
+
+
 def market_snapshot() -> dict:
+    return _MARKET_CACHE.get_or_fetch("bitget:ticker:SBTCSUSDT", _market_snapshot_uncached, ttl_ms=5000)
+
+
+def _market_snapshot_uncached() -> dict:
     # Demo-only public market data. The symbol is deliberately the SUSDT demo
     # instrument, never the live USDT-FUTURES product.
     url = 'https://api.bitget.com/api/v2/mix/market/tickers?productType=SUSDT-FUTURES'
@@ -150,7 +157,7 @@ def intelligence_snapshot(symbol: str = "BTCUSDT") -> dict:
                 "source_attempts": attempts,
                 "rate_limit": {"policy": "one sequential request per source per refresh; local per-exchange budgets; no credentialed calls"},
             }
-        return _INTELLIGENCE_CACHE.get_or_fetch(f"intelligence:{symbol}", fetch, ttl_ms=5000)
+        return _INTELLIGENCE_CACHE.get_or_fetch(f"intelligence:{symbol}", fetch, ttl_ms=15000)
 
 
 class Handler(BaseHTTPRequestHandler):

@@ -49,25 +49,8 @@ function App() {
   }
   useEffect(() => { refresh(); const timer = setInterval(refresh, 5000); return () => clearInterval(timer); }, []);
   useEffect(() => {
-    let socket;
-    try {
-      socket = new WebSocket('wss://ws.bitget.com/v2/ws/public');
-      socket.onopen = () => { setStreamError(null); socket.send(JSON.stringify({ op: 'subscribe', args: [{ instType: 'MC', channel: 'ticker', instId: 'SBTCSUSDT' }] })); };
-      socket.onmessage = event => {
-        try {
-          const payload = JSON.parse(event.data);
-          if (payload?.event === 'error') { setStreamConnected(false); setStreamError(`Bitget WebSocket ${payload.code ?? 'error'}: ${payload.msg ?? 'subscription rejected'}`); return; }
-          if (payload?.event === 'subscribe') { setStreamConnected(true); return; }
-          const tick = payload?.data?.[0];
-          if (!tick?.lastPr) return;
-          const next = { ok: true, source: 'Bitget public WebSocket · SUSDT-FUTURES', symbol: tick.instId || 'SBTCSUSDT', price: tick.lastPr, change24h: tick.change24h, high24h: tick.high24h, low24h: tick.low24h, ts: tick.ts };
-          setStreamConnected(true); setStreamError(null); setMarket(next); setHistory(previous => [...previous, Number(next.price)].slice(-32)); setUpdatedAt(Date.now()); setError(null);
-        } catch { setStreamConnected(false); setStreamError('Bitget WebSocket returned an unreadable frame'); }
-      };
-      socket.onerror = () => { setStreamConnected(false); setStreamError('Bitget WebSocket transport error'); };
-      socket.onclose = () => setStreamConnected(false);
-    } catch { setStreamConnected(false); setStreamError('Bitget WebSocket unavailable'); }
-    return () => socket?.close();
+    setStreamConnected(false);
+    setStreamError('Bitget SUSDT-FUTURES WebSocket is unavailable; rate-budgeted REST pooling remains active');
   }, []);
 
   const chartPoints = useMemo(() => {
