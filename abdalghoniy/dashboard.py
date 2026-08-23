@@ -42,7 +42,7 @@ def make_status(root: Path = ROOT) -> dict:
             {'gate': 'micro_live', 'status': 'blocked_no_credentials'},
         ],
         'strategies': {'counter_trend_scalp': 'paper-only', 'funding_carry': 'paper-only', 'mean_reversion': 'paper-only'},
-        'reports': ['/reports/P0.md', '/reports/P1.md', '/reports/P2-P4.md'],
+        'reports': ['/reports/P0.md', '/reports/P1.md', '/reports/P2-P4.md', '/reports/REVIEW.md'],
     }
 
 

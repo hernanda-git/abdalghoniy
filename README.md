@@ -12,7 +12,7 @@ The Linux implementation path for this session is `/root/abdalghoniy`. The suppl
 - Protective reduce-only orders are preserved when the kill-switch trips.
 - Secrets are environment-only.
 
-Run tests with `python3 -m pytest -q`.
+Run tests with `python3 -m pytest -q`. Run the paper-only composition root with `python3 -m abdalghoniy --status`.
 
 ## Monitoring deployment
 

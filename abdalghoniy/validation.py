@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from decimal import Decimal
 from math import floor
@@ -18,7 +19,17 @@ class ValidationLadder:
         return cost_edge_bps >= round_trip_fee_bps * Decimal("2") and expectancy > 0
 
     def authorize(self, gates: List[GateResult]) -> bool:
-        return len(gates) == 6 and all(g.passed and g.name == expected for g, expected in zip(gates, self.names))
+        if len(gates) != 6 or not all(g.passed and g.name == expected for g, expected in zip(gates, self.names)):
+            return False
+        required = {'dataset_hash', 'evaluated_at', 'code_hash', 'metric'}
+        for gate in gates:
+            try:
+                evidence = json.loads(gate.detail)
+            except (TypeError, json.JSONDecodeError):
+                return False
+            if not required.issubset(evidence) or not all(evidence[k] not in ('', None) for k in required):
+                return False
+        return True
 
 
 def purged_splits(n_samples: int, folds: int = 5, purge: int = 1, embargo: int = 1) -> List[Tuple[list, list]]:
