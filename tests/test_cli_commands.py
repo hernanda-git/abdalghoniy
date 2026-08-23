@@ -4,6 +4,31 @@ import subprocess
 import sys
 from pathlib import Path
 
+from abdalghoniy.data import fetch_demo_candles
+
+
+def test_fetch_demo_candles_uses_demo_product_and_translates_symbol(monkeypatch, tmp_path):
+    seen = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self):
+            return b'{"code":"00000","data":[["1700000000000","100","101","99","100.5","2","201"]]}'
+
+    def fake_urlopen(request, timeout):
+        seen["url"] = request.full_url
+        seen["timeout"] = timeout
+        return Response()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    output = fetch_demo_candles("BTCUSDT", "1m", output=tmp_path / "demo.csv")
+    assert output.exists()
+    assert "symbol=SBTCSUSDT" in seen["url"]
+    assert "productType=SUSDT-FUTURES" in seen["url"]
+
 
 def write_dataset(path: Path) -> None:
     with path.open("w", newline="") as handle:

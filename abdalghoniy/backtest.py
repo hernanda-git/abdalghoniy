@@ -14,6 +14,7 @@ class Trade:
     quantity: Decimal
     net: Decimal
     bars_held: int
+    funding: Decimal = Decimal("0")
 
 
 def replay_counter_trend(candles: Iterable[Candle], cvd_changes: Iterable[Decimal], model: CostModel, config: CounterTrendConfig, stop_distance: Decimal, target_distance: Decimal, max_hold: int = 5, funding_bps: Optional[Iterable[Decimal]] = None) -> List[Trade]:
@@ -51,7 +52,8 @@ def replay_counter_trend(candles: Iterable[Candle], cvd_changes: Iterable[Decima
                 if bar.low <= target:
                     exit_price, held = target, j - i
                     break
-        pnl = net_pnl(entry, Decimal('1'), entry, exit_price, direction, model)
-        trades.append(Trade(direction, entry, exit_price, Decimal('1'), pnl.net, held))
+        funding_cash = -entry * Decimal('1') * funding[i] / Decimal('10000') if direction == 'long' else entry * Decimal('1') * funding[i] / Decimal('10000')
+        pnl = net_pnl(entry, Decimal('1'), entry, exit_price, direction, model, funding=funding_cash)
+        trades.append(Trade(direction, entry, exit_price, Decimal('1'), pnl.net, held, funding_cash))
         next_entry = i + held + 1
     return trades

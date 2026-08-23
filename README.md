@@ -12,14 +12,14 @@ The Linux implementation path for this session is `/root/abdalghoniy`. The suppl
 - Protective reduce-only orders are preserved when the kill-switch trips.
 - Secrets are environment-only.
 
-Run tests with `python3 -m pytest -q`. Run the paper-only composition root with `python3 -m abdalghoniy --status`. A replay requires a supplied, real dataset CSV and writes a structured report:
+Run tests with `python3 -m pytest -q`. Run the paper-only composition root with `python3 -m abdalghoniy --status`. A replay uses public demo candles by default or an explicitly supplied CSV and writes a structured report:
 
 ```bash
-python3 -m abdalghoniy replay --symbol BTCUSDT --interval 1m --input data.csv
+python3 -m abdalghoniy replay --symbol BTCUSDT --interval 1m
 python3 -m abdalghoniy report --latest
 ```
 
-The CSV must contain `open,high,low,close,volume`; optional `timestamp,cvd_change,funding_bps` columns are preserved in the dataset hash and used by the replay. No candles are generated when data is absent.
+When `--input` is omitted, the replay fetches public Bitget `SUSDT-FUTURES` demo candles and stores the ignored CSV under `data/`. An existing CSV can be supplied with `--input` for reproducible offline replay.
 
 ## Monitoring deployment
 
