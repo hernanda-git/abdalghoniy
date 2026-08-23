@@ -1,0 +1,11 @@
+[project]
+name = "abdalghoniy"
+version = "0.1.0"
+description = "Safety-first fast-alpha perpetual futures engine"
+requires-python = ">=3.11"
+dependencies = ["PyYAML>=6.0"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
