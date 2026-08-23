@@ -22,6 +22,7 @@ function App() {
   const [updatedAt, setUpdatedAt] = useState(null);
   const [latency, setLatency] = useState(null);
   const [error, setError] = useState(null);
+  const [streamConnected, setStreamConnected] = useState(false);
 
   async function refresh() {
     const started = performance.now();
@@ -34,7 +35,28 @@ function App() {
       if (marketResponse?.ok) setHistory(previous => [...previous, Number(marketResponse.price)].slice(-32));
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Connection error'); }
   }
-  useEffect(() => { refresh(); const timer = setInterval(refresh, 5000); return () => clearInterval(timer); }, []);
+  useEffect(() => {
+    refresh(); const timer = setInterval(refresh, 5000); return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    let socket;
+    try {
+      socket = new WebSocket('wss://ws.bitget.com/v2/ws/public');
+      socket.onopen = () => { setStreamConnected(true); socket.send(JSON.stringify({ op: 'subscribe', args: [{ instType: 'mc', channel: 'ticker', instId: 'SBTCSUSDT' }] })); };
+      socket.onmessage = event => {
+        try {
+          const payload = JSON.parse(event.data);
+          const tick = payload?.data?.[0];
+          if (!tick?.lastPr) return;
+          const next = { ok: true, source: 'Bitget public WebSocket · SUSDT-FUTURES', symbol: tick.instId || 'SBTCSUSDT', price: tick.lastPr, change24h: tick.change24h, high24h: tick.high24h, low24h: tick.low24h, ts: tick.ts };
+          setMarket(next); setHistory(previous => [...previous, Number(next.price)].slice(-32)); setUpdatedAt(Date.now()); setError(null);
+        } catch { /* ignore protocol heartbeat frames */ }
+      };
+      socket.onerror = () => setStreamConnected(false);
+      socket.onclose = () => setStreamConnected(false);
+    } catch { setStreamConnected(false); }
+    return () => socket?.close();
+  }, []);
 
   const chartPoints = useMemo(() => {
     if (history.length < 2) return '';
@@ -55,7 +77,7 @@ function App() {
         <a href="#validation"><ShieldCheck size={16} />Validation</a>
         <a href="#reports"><ArrowUpRight size={16} />Reports</a>
       </nav>
-      <div className="rail-footer"><div className="rail-status"><span className={`status-light ${live ? '' : 'offline'}`} />{live ? 'Live demo feed' : 'Feed unavailable'}</div><span>v1 · paper</span></div>
+      <div className="rail-footer"><div className="rail-status"><span className={`status-light ${live ? '' : 'offline'}`} />{streamConnected ? 'Live socket' : live ? 'REST fallback' : 'Feed unavailable'}</div><span>v1 · paper</span></div>
     </aside>
 
     <main className="content" id="overview">
@@ -64,7 +86,7 @@ function App() {
       {error && <div className="notice notice-error"><CircleAlert size={16} />{error}</div>}
 
       <section className="overview-grid">
-        <article className="surface market-surface" id="market"><SectionHeading eyebrow="SUSDT-FUTURES · PUBLIC" title="Market pulse" action={<Badge tone={live ? 'green' : 'red'}>{live ? 'CONNECTED' : 'OFFLINE'}</Badge>} /><div className="market-main"><div><span className="instrument">{market?.symbol ?? 'SBTCSUSDT'}</span><div className="market-price">{formatPrice(market?.price)}</div><div className={`market-change ${Number(market?.change24h) < 0 ? 'negative' : ''}`}>{market?.change24h ? `${(Number(market.change24h) * 100).toFixed(2)}% 24h` : 'Waiting for feed'}</div></div><svg className="sparkline" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Recent price movement"><polyline points={chartPoints || '0,80 25,55 50,66 75,35 100,45'} /></svg></div><div className="market-foot"><div><span>24h high</span><strong>{formatPrice(market?.high24h)}</strong></div><div><span>24h low</span><strong>{formatPrice(market?.low24h)}</strong></div><div><span>Last tick</span><strong>{market?.ts ? formatTime(Number(market.ts)) : '—'}</strong></div></div></article>
+        <article className="surface market-surface" id="market"><SectionHeading eyebrow="SUSDT-FUTURES · PUBLIC" title="Market pulse" action={<Badge tone={live ? 'green' : 'red'}>{streamConnected ? 'LIVE SOCKET' : live ? 'REST FALLBACK' : 'OFFLINE'}</Badge>} /><div className="market-main"><div><span className="instrument">{market?.symbol ?? 'SBTCSUSDT'}</span><div className="market-price">{formatPrice(market?.price)}</div><div className={`market-change ${Number(market?.change24h) < 0 ? 'negative' : ''}`}>{market?.change24h ? `${(Number(market.change24h) * 100).toFixed(2)}% 24h` : 'Waiting for feed'}</div></div><svg className="sparkline" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Recent price movement"><polyline points={chartPoints || '0,80 25,55 50,66 75,35 100,45'} /></svg></div><div className="market-foot"><div><span>24h high</span><strong>{formatPrice(market?.high24h)}</strong></div><div><span>24h low</span><strong>{formatPrice(market?.low24h)}</strong></div><div><span>Last tick</span><strong>{market?.ts ? formatTime(Number(market.ts)) : '—'}</strong></div></div></article>
         <article className="surface posture-surface"><SectionHeading eyebrow="GUARDRAILS" title="Safety posture" action={<Gauge size={18} className="muted-icon" />} /><div className="hero-state"><div className={`state-mark ${halted ? 'danger' : ''}`}>{halted ? <CircleAlert size={23} /> : <ShieldCheck size={23} />}</div><div><strong>{halted ? 'Halted' : 'Armed'}</strong><span>{halted ? 'New risk is blocked' : 'Paper risk controls active'}</span></div></div><div className="posture-list"><div><span>Live orders</span><Badge tone="green">Disabled</Badge></div><div><span>Hard stop</span><Badge tone="green">Required</Badge></div><div><span>Daily breaker</span><Badge tone="green">Enabled</Badge></div><div><span>Max leverage</span><strong>3×</strong></div></div></article>
       </section>
 
