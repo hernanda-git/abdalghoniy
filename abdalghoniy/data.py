@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .strategies import Candle
+from .market_data import PublicBitgetMarketData
 
 
 @dataclass(frozen=True)

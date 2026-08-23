@@ -14,6 +14,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from .multi_exchange import EndpointGuard, GLOBAL_ENDPOINT_GUARD
+
 
 PUBLIC_RATE_LIMIT = {"limit": 20, "window": "1s", "scope": "public"}
 
@@ -124,11 +126,13 @@ class PublicBitgetMarketData:
     }
 
     def __init__(self, *, transport: Callable | None = None, base_url: str = BASE_URL,
-                 clock_ms: Callable[[], int] | None = None, stale_after_ms: int = 120_000) -> None:
+                 clock_ms: Callable[[], int] | None = None, stale_after_ms: int = 120_000,
+                 endpoint_guard: EndpointGuard | None = None) -> None:
         self.transport = transport or self._urlopen_transport
         self.base_url = base_url.rstrip("/")
         self.clock_ms = clock_ms or (lambda: int(time.time() * 1000))
         self.stale_after_ms = stale_after_ms
+        self.endpoint_guard = endpoint_guard or GLOBAL_ENDPOINT_GUARD
 
     @staticmethod
     def venue_symbol(symbol: str) -> str:
@@ -148,6 +152,10 @@ class PublicBitgetMarketData:
         path = self._ENDPOINTS[kind]
         query = urllib.parse.urlencode(params)
         method = f"GET {path}"
+        endpoint = f"Bitget:{path}"
+        decision = self.endpoint_guard.check(endpoint)
+        if not decision.allowed:
+            return MarketDataResult(None, MarketDataMetadata("Bitget", method, None, None, True, {**PUBLIC_RATE_LIMIT, "guard": decision.reason, "retry_after_ms": decision.retry_after_ms}, unavailable=True, error=decision.reason))
         try:
             payload = self.transport("GET", f"{self.base_url}{path}?{query}", headers={}, body=None)
             if payload.get("code") != "00000":
@@ -175,8 +183,9 @@ class PublicBitgetMarketData:
             return MarketDataResult(data, MarketDataMetadata("Bitget", method, updated, freshness,
                 freshness is None or freshness > stale_after, dict(PUBLIC_RATE_LIMIT)))
         except Exception as exc:
+            self.endpoint_guard.record_error(endpoint, type(exc).__name__)
             return MarketDataResult(None, MarketDataMetadata("Bitget", method, None, None, True,
-                dict(PUBLIC_RATE_LIMIT), unavailable=True, error=type(exc).__name__))
+                {**PUBLIC_RATE_LIMIT, "guard": "error_cooldown"}, unavailable=True, error=type(exc).__name__))
 
     def ticker(self, symbol: str) -> MarketDataResult:
         return self._request("ticker", symbol, {"productType": self.PRODUCT_TYPE, "symbol": self.venue_symbol(symbol)})

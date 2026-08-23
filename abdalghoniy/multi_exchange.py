@@ -10,9 +10,49 @@ import json
 import time
 import urllib.parse
 import urllib.request
-from collections import deque
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable
+
+
+@dataclass(frozen=True)
+class GuardDecision:
+    allowed: bool
+    reason: str
+    remaining: int
+    retry_after_ms: int = 0
+
+
+class EndpointGuard:
+    """Per-endpoint rolling-window budget plus cooldown after rate-limit errors."""
+    def __init__(self, *, max_requests: int, window_ms: int, cooldown_ms: int = 10_000, clock_ms: Callable[[], int] | None = None):
+        self.max_requests = max_requests
+        self.window_ms = window_ms
+        self.cooldown_ms = cooldown_ms
+        self.clock_ms = clock_ms or (lambda: int(time.time() * 1000))
+        self._calls: dict[str, deque[int]] = defaultdict(deque)
+        self._cooldown_until: dict[str, int] = {}
+
+    def check(self, key: str) -> GuardDecision:
+        now = self.clock_ms()
+        until = self._cooldown_until.get(key, 0)
+        if until > now:
+            return GuardDecision(False, "cooldown", 0, until - now)
+        calls = self._calls[key]
+        while calls and now - calls[0] >= self.window_ms:
+            calls.popleft()
+        if len(calls) >= self.max_requests:
+            return GuardDecision(False, "local_rate_budget_exhausted", 0, self.window_ms - (now - calls[0]))
+        calls.append(now)
+        return GuardDecision(True, "allowed", self.max_requests - len(calls), 0)
+
+    def record_error(self, key: str, error: str) -> None:
+        text = str(error).lower()
+        if any(token in text for token in ("429", "rate", "too many", "10006", "30016")):
+            self._cooldown_until[key] = self.clock_ms() + self.cooldown_ms
+
+
+GLOBAL_ENDPOINT_GUARD = EndpointGuard(max_requests=10, window_ms=1000)
 
 
 @dataclass(frozen=True)
@@ -81,11 +121,16 @@ def _http_json(url: str, *, method: str = "GET", body: dict | None = None, timeo
 
 class PublicBybitClient:
     BASE_URL = "https://api.bybit.com"
-    def __init__(self, *, transport: Callable[..., dict] | None = None, budget: ExchangeBudget | None = None):
+    def __init__(self, *, transport: Callable[..., dict] | None = None, budget: ExchangeBudget | None = None, endpoint_guard: EndpointGuard | None = None):
         self.transport = transport or _http_json
         self.budget = budget or ExchangeBudget(max_requests=4, window_ms=1000)
+        self.endpoint_guard = endpoint_guard or GLOBAL_ENDPOINT_GUARD
 
     def daily(self, symbol: str = "BTCUSDT", limit: int = 365) -> SourceResult:
+        endpoint = "Bybit:/v5/market/kline"
+        decision = self.endpoint_guard.check(endpoint)
+        if not decision.allowed:
+            return SourceResult("Bybit", [], "GET /v5/market/kline", False, f"{decision.reason}:retry_after_{decision.retry_after_ms}ms")
         if not self.budget.allow():
             return SourceResult("Bybit", [], "GET /v5/market/kline", False, "local_rate_budget_exhausted")
         query = urllib.parse.urlencode({"category": "linear", "symbol": symbol.upper(), "interval": "D", "limit": str(min(limit, 1000))})
@@ -95,17 +140,23 @@ class PublicBybitClient:
                 raise RuntimeError(f"bybit_ret_{payload.get('retCode')}")
             return SourceResult("Bybit", normalise_bybit_kline(payload), "GET /v5/market/kline", True)
         except Exception as exc:
+            self.endpoint_guard.record_error(endpoint, type(exc).__name__)
             return SourceResult("Bybit", [], "GET /v5/market/kline", False, type(exc).__name__)
 
 
 class PublicHyperliquidClient:
     BASE_URL = "https://api.hyperliquid.xyz/info"
-    def __init__(self, *, transport: Callable[..., dict] | None = None, budget: ExchangeBudget | None = None, clock_ms: Callable[[], int] | None = None):
+    def __init__(self, *, transport: Callable[..., dict] | None = None, budget: ExchangeBudget | None = None, clock_ms: Callable[[], int] | None = None, endpoint_guard: EndpointGuard | None = None):
         self.transport = transport or _http_json
         self.budget = budget or ExchangeBudget(max_requests=2, window_ms=1000)
         self.clock_ms = clock_ms or (lambda: int(time.time() * 1000))
+        self.endpoint_guard = endpoint_guard or GLOBAL_ENDPOINT_GUARD
 
     def daily(self, coin: str = "BTC", limit: int = 365) -> SourceResult:
+        endpoint = "Hyperliquid:/info:candleSnapshot"
+        decision = self.endpoint_guard.check(endpoint)
+        if not decision.allowed:
+            return SourceResult("Hyperliquid", [], "POST /info candleSnapshot", False, f"{decision.reason}:retry_after_{decision.retry_after_ms}ms")
         if not self.budget.allow():
             return SourceResult("Hyperliquid", [], "POST /info candleSnapshot", False, "local_rate_budget_exhausted")
         end = self.clock_ms()
@@ -115,16 +166,22 @@ class PublicHyperliquidClient:
             rows = [[str(row.get("t")), str(row.get("o")), str(row.get("h")), str(row.get("l")), str(row.get("c")), str(row.get("v"))] for row in payload]
             return SourceResult("Hyperliquid", rows, "POST /info candleSnapshot", bool(rows), None if rows else "no_data")
         except Exception as exc:
+            self.endpoint_guard.record_error(endpoint, type(exc).__name__)
             return SourceResult("Hyperliquid", [], "POST /info candleSnapshot", False, type(exc).__name__)
 
 
 class PublicMexcClient:
     BASE_URL = "https://contract.mexc.com"
-    def __init__(self, *, transport: Callable[..., dict] | None = None, budget: ExchangeBudget | None = None):
+    def __init__(self, *, transport: Callable[..., dict] | None = None, budget: ExchangeBudget | None = None, endpoint_guard: EndpointGuard | None = None):
         self.transport = transport or _http_json
         self.budget = budget or ExchangeBudget(max_requests=2, window_ms=1000)
+        self.endpoint_guard = endpoint_guard or GLOBAL_ENDPOINT_GUARD
 
     def daily(self, symbol: str = "BTC_USDT", limit: int = 365) -> SourceResult:
+        endpoint = "MEXC:/api/v1/contract/kline"
+        decision = self.endpoint_guard.check(endpoint)
+        if not decision.allowed:
+            return SourceResult("MEXC", [], "GET /api/v1/contract/kline", False, f"{decision.reason}:retry_after_{decision.retry_after_ms}ms")
         if not self.budget.allow():
             return SourceResult("MEXC", [], "GET /api/v1/contract/kline", False, "local_rate_budget_exhausted")
         query = urllib.parse.urlencode({"interval": "Day", "limit": str(min(limit, 500))})
@@ -136,4 +193,5 @@ class PublicMexcClient:
                 rows.append([str(value) for value in values])
             return SourceResult("MEXC", rows, "GET /api/v1/contract/kline", bool(rows), None if rows else "no_data")
         except Exception as exc:
+            self.endpoint_guard.record_error(endpoint, type(exc).__name__)
             return SourceResult("MEXC", [], "GET /api/v1/contract/kline", False, type(exc).__name__)

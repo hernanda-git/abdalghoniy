@@ -144,20 +144,11 @@ def market_snapshot() -> dict:
 
 
 def _market_snapshot_uncached() -> dict:
-    # Demo-only public market data. The symbol is deliberately the SUSDT demo
-    # instrument, never the live USDT-FUTURES product.
-    url = 'https://api.bitget.com/api/v2/mix/market/tickers?productType=SUSDT-FUTURES'
-    try:
-        with urllib.request.urlopen(url, timeout=5) as response:
-            payload = json.load(response)
-        rows = payload.get('data') or []
-        row = next((item for item in rows if item.get('symbol') == 'SBTCSUSDT'), rows[0] if rows else None)
-        if not row:
-            return {'source': 'Bitget SUSDT-FUTURES public ticker', 'ok': False, 'error': 'NoDemoTicker'}
-        return {'source': 'Bitget public · SUSDT-FUTURES', 'symbol': row.get('symbol'), 'price': row.get('lastPr'), 'change24h': row.get('change24h'), 'high24h': row.get('high24h'), 'low24h': row.get('low24h'), 'ts': row.get('ts'), 'ok': True}
-    except Exception as exc:
-        return {'source': 'Bitget SUSDT-FUTURES public ticker', 'ok': False, 'error': type(exc).__name__}
-
+    result = PublicBitgetMarketData().ticker("BTCUSDT")
+    if result.metadata.unavailable or not result.data:
+        return {'source': 'Bitget SUSDT-FUTURES public ticker', 'ok': False, 'error': result.metadata.error or 'Unavailable', 'rate_limit': result.metadata.rate_limit}
+    row = result.data
+    return {'source': 'Bitget public · SUSDT-FUTURES', 'symbol': row.get('symbol'), 'price': row.get('lastPr'), 'change24h': row.get('change24h'), 'high24h': row.get('high24h'), 'low24h': row.get('low24h'), 'ts': row.get('ts'), 'ok': True, 'rate_limit': result.metadata.rate_limit}
 
 _INTELLIGENCE_CACHE = MarketDataCache()
 _INTELLIGENCE_LOCK = Lock()

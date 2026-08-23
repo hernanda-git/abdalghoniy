@@ -1,8 +1,8 @@
 import json
 import time
-import urllib.parse
-import urllib.request
 from pathlib import Path
+
+from .market_data import PublicBitgetMarketData
 
 
 class LiveDemoShadow:
@@ -20,13 +20,10 @@ class LiveDemoShadow:
 
     @staticmethod
     def _fetch(symbol, interval, limit):
-        query = urllib.parse.urlencode({"symbol": symbol, "productType": "SUSDT-FUTURES", "granularity": interval, "limit": str(limit)})
-        request = urllib.request.Request(f"https://api.bitget.com/api/v2/mix/market/candles?{query}", headers={"User-Agent": "abdalghoniy-shadow/0.1"})
-        with urllib.request.urlopen(request, timeout=15) as response:
-            payload = json.load(response)
-        if payload.get("code") != "00000":
-            raise RuntimeError(f"Bitget demo candle fetch failed: {payload.get('code')}")
-        return payload.get("data") or []
+        result = PublicBitgetMarketData().candles(symbol, granularity=interval, limit=limit)
+        if result.metadata.unavailable:
+            raise RuntimeError(f"Bitget demo candle fetch failed: {result.metadata.error}")
+        return result.data or []
 
     def _write(self, event):
         self.event_path.parent.mkdir(parents=True, exist_ok=True)

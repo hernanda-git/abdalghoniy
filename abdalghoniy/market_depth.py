@@ -8,6 +8,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Callable
 
+from .multi_exchange import EndpointGuard, GLOBAL_ENDPOINT_GUARD
+
 
 class ProductTypeError(ValueError):
     """Raised when a live USDT-FUTURES product is requested."""
@@ -72,12 +74,13 @@ class PublicOrderBookClient:
     ENDPOINT = "/api/v2/mix/market/merge-depth"
     RATE_LIMIT_REQUESTS_PER_SECOND = 20
 
-    def __init__(self, *, product_type: str = "SUSDT-FUTURES", base_url: str = "https://api.bitget.com", transport: Callable | None = None):
+    def __init__(self, *, product_type: str = "SUSDT-FUTURES", base_url: str = "https://api.bitget.com", transport: Callable | None = None, endpoint_guard: EndpointGuard | None = None):
         if product_type != "SUSDT-FUTURES":
             raise ProductTypeError("ABDALGHONIY permits only SUSDT-FUTURES")
         self.product_type = product_type
         self.base_url = base_url.rstrip("/")
         self.transport = transport or self._urlopen_transport
+        self.endpoint_guard = endpoint_guard or GLOBAL_ENDPOINT_GUARD
 
     @staticmethod
     def venue_symbol(symbol: str) -> str:
@@ -96,12 +99,19 @@ class PublicOrderBookClient:
     def fetch(self, symbol: str, *, limit: int = 20) -> OrderBookSnapshot:
         if not 1 <= limit <= 100:
             return OrderBookSnapshot(status="unavailable", error="invalid_limit")
+        endpoint = f"Bitget:{self.ENDPOINT}"
+        decision = self.endpoint_guard.check(endpoint)
+        if not decision.allowed:
+            return OrderBookSnapshot(status="unavailable", error=f"{decision.reason}:retry_after_{decision.retry_after_ms}ms")
         query = urllib.parse.urlencode({"symbol": self.venue_symbol(symbol), "productType": self.product_type, "limit": str(limit)})
         url = f"{self.base_url}{self.ENDPOINT}?{query}"
         try:
             payload = self.transport("GET", url, headers={}, body=None)
             if payload.get("code") != "00000":
-                return OrderBookSnapshot(status="unavailable", error=f"bitget_code_{payload.get('code')}")
+                error = f"bitget_code_{payload.get('code')}"
+                self.endpoint_guard.record_error(endpoint, error)
+                return OrderBookSnapshot(status="unavailable", error=error)
             return OrderBookAggregator.from_bitget(payload.get("data") or {})
         except (OSError, TimeoutError, ValueError, TypeError, KeyError) as exc:
+            self.endpoint_guard.record_error(endpoint, str(exc))
             return OrderBookSnapshot(status="unavailable", error=str(exc) or type(exc).__name__.lower())
