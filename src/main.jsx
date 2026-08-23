@@ -10,7 +10,7 @@ const number = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 function formatTime(value) { return value ? jakarta.format(new Date(value)) : 'Unavailable'; }
 function formatPrice(value) { return value == null || Number.isNaN(Number(value)) ? 'Unavailable' : number.format(Number(value)); }
 function titleCase(value = '') { return value.replaceAll('_', ' '); }
-function availability(value) { return value == null || value === '' ? 'Unavailable' : value; }
+function availability(value) { return value == null || value === '' ? 'Unavailable' : typeof value === 'object' ? JSON.stringify(value) : value; }
 
 function Badge({ children, tone = 'neutral' }) { return <span className={`badge badge-${tone}`}>{children}</span>; }
 function Metric({ label, value, detail, tone = '' }) { return <div className="metric"><span className="metric-label">{label}</span><strong className={tone}>{value}</strong>{detail && <span className="metric-detail">{detail}</span>}</div>; }
