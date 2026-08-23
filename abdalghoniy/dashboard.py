@@ -93,7 +93,13 @@ class Handler(BaseHTTPRequestHandler):
                 if not target.exists() or not target.is_file() or WEB_ROOT not in target.parents:
                     self._send(404, b'Not found', 'text/plain; charset=utf-8')
                     return
-            content_type = 'text/html; charset=utf-8' if target.suffix == '.html' else 'text/plain; charset=utf-8'
+            content_type = {
+                '.html': 'text/html; charset=utf-8',
+                '.js': 'application/javascript; charset=utf-8',
+                '.css': 'text/css; charset=utf-8',
+                '.svg': 'image/svg+xml',
+                '.json': 'application/json; charset=utf-8',
+            }.get(target.suffix, 'text/plain; charset=utf-8')
             self._send(200, target.read_bytes(), content_type)
 
     def log_message(self, fmt, *args):
