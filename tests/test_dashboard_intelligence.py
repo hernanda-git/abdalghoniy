@@ -1,7 +1,27 @@
-from abdalghoniy.dashboard import intelligence_snapshot
+from abdalghoniy.dashboard import build_freshness
+
+
+def test_freshness_separates_source_age_from_request_age_and_applies_policy():
+    payload = build_freshness(
+        source_updated_at_ms=1_700_000_000_000,
+        fetched_at_ms=1_700_000_060_000,
+        now_ms=1_700_000_120_000,
+        kind="historical_daily",
+        source="Hyperliquid",
+        stale_after_ms=86_400_000,
+    )
+
+    assert payload["source_age_ms"] == 120_000
+    assert payload["request_age_ms"] == 60_000
+    assert payload["freshness_ms"] == payload["source_age_ms"]
+    assert payload["data_age_ms"] == payload["source_age_ms"]
+    assert payload["stale"] is False
+    assert payload["stale_policy"] == "source_age_ms > 86400000"
+    assert payload["kind"] == "historical_daily"
 
 
 def test_intelligence_snapshot_has_explicit_panels_and_unavailable_liquidations(monkeypatch):
+    from abdalghoniy.dashboard import intelligence_snapshot
     class FakeClient:
         def candles(self, symbol, *, granularity, limit):
             rows = []
@@ -19,8 +39,10 @@ def test_intelligence_snapshot_has_explicit_panels_and_unavailable_liquidations(
     assert set(payload) >= {"ranges", "rsi", "support_resistance", "smc", "order_book", "liquidations", "freshness", "rate_limit"}
     assert payload["liquidations"]["status"] == "unavailable"
     assert payload["order_book"]["status"] == "ok"
-    assert payload["freshness"]["freshness_ms"] is not None
+    assert payload["freshness"]["freshness_ms"] == payload["freshness"]["source_age_ms"]
     assert payload["freshness"]["kind"] == "historical_daily"
-    assert payload["freshness"]["stale"] is False
-    assert payload["freshness"]["data_age_ms"] is not None
+    assert payload["freshness"]["stale"] is (payload["freshness"]["source_age_ms"] > 172800000)
+    assert payload["freshness"]["stale_policy"] == "source_age_ms > 172800000"
+    assert payload["freshness"]["data_age_ms"] == payload["freshness"]["source_age_ms"]
     assert payload["order_book_freshness"]["kind"] == "order_book"
+    assert payload["order_book_freshness"]["source_age_ms"] == payload["order_book_freshness"]["freshness_ms"]
