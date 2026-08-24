@@ -30,3 +30,11 @@ def test_counter_trend_diagnostics_identifies_missing_cvd_and_threshold_blockers
     assert result["momentum_abs_ge_threshold"] == 0
     assert result["blocked_by_cvd"] == 0
     assert result["candidate_signals"] == 0
+
+
+def test_replay_caps_quantity_and_costs_by_max_position_notional():
+    bars = [Candle(100, 100, 100, 100, 1), Candle(100, 102, 100, 102, 1), Candle(102, 102, 102, 102, 1)]
+    trades = replay_counter_trend(bars, [Decimal("0"), Decimal("-20"), Decimal("0")], CostModel(Decimal("0.0005"), Decimal("0.0005"), Decimal("2")), CounterTrendConfig(Decimal("10"), Decimal("10")), Decimal("1"), Decimal("2"), max_position_notional=Decimal("100"), funding_bps=[Decimal("0"), Decimal("0"), Decimal("0")])
+    assert len(trades) == 1
+    assert trades[0].quantity == Decimal("0.9803921568627450980392156863")
+    assert trades[0].net > Decimal("-1")

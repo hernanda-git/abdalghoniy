@@ -51,6 +51,7 @@ def _replay(args, cfg: AppConfig) -> int:
         target_distance=Decimal(str(args.target_distance)),
         max_hold=args.max_hold,
         funding_bps=dataset.funding_bps,
+        max_position_notional=cfg.max_position_notional,
     )
     diagnostics = counter_trend_diagnostics(dataset.candles, dataset.cvd_changes, CounterTrendConfig(), dataset.funding_bps)
     gross = sum(((t.entry - t.exit) * t.quantity if t.direction == "short" else (t.exit - t.entry) * t.quantity for t in trades), Decimal("0"))

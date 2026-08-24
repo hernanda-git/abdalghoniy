@@ -65,7 +65,7 @@ def counter_trend_diagnostics(candles: Iterable[Candle], cvd_changes: Iterable[D
     return result
 
 
-def replay_counter_trend(candles: Iterable[Candle], cvd_changes: Iterable[Decimal], model: CostModel, config: CounterTrendConfig, stop_distance: Decimal, target_distance: Decimal, max_hold: int = 5, funding_bps: Optional[Iterable[Decimal]] = None) -> List[Trade]:
+def replay_counter_trend(candles: Iterable[Candle], cvd_changes: Iterable[Decimal], model: CostModel, config: CounterTrendConfig, stop_distance: Decimal, target_distance: Decimal, max_hold: int = 5, funding_bps: Optional[Iterable[Decimal]] = None, max_position_notional: Optional[Decimal] = None) -> List[Trade]:
     bars = list(candles)
     cvds = list(cvd_changes)
     funding = list(funding_bps) if funding_bps is not None else [Decimal('0')] * len(bars)
@@ -100,8 +100,12 @@ def replay_counter_trend(candles: Iterable[Candle], cvd_changes: Iterable[Decima
                 if bar.low <= target:
                     exit_price, held = target, j - i
                     break
-        funding_cash = -entry * Decimal('1') * funding[i] / Decimal('10000') if direction == 'long' else entry * Decimal('1') * funding[i] / Decimal('10000')
-        pnl = net_pnl(entry, Decimal('1'), entry, exit_price, direction, model, funding=funding_cash)
-        trades.append(Trade(direction, entry, exit_price, Decimal('1'), pnl.net, held, funding_cash))
+        quantity = Decimal('1') if max_position_notional is None else min(Decimal('1'), max_position_notional / entry)
+        if quantity <= 0:
+            continue
+        notional = entry * quantity
+        funding_cash = -notional * funding[i] / Decimal('10000') if direction == 'long' else notional * funding[i] / Decimal('10000')
+        pnl = net_pnl(notional, quantity, entry, exit_price, direction, model, funding=funding_cash)
+        trades.append(Trade(direction, entry, exit_price, quantity, pnl.net, held, funding_cash))
         next_entry = i + held + 1
     return trades

@@ -51,13 +51,29 @@ def fetch_demo_candles(symbol: str, interval: str, limit: int = 100, output: Pat
     granularity = {"1m": "1m", "3m": "3m", "5m": "5m", "15m": "15m", "30m": "30m", "1H": "1H", "4H": "4H", "1D": "1D"}.get(interval)
     if granularity is None:
         raise ValueError("unsupported interval for Bitget public candles")
-    query = urllib.parse.urlencode({"symbol": venue_symbol, "productType": "SUSDT-FUTURES", "granularity": granularity, "limit": str(limit)})
-    request = urllib.request.Request(f"https://api.bitget.com/api/v2/mix/market/candles?{query}", headers={"User-Agent": "abdalghoniy-paper/0.1"})
-    with urllib.request.urlopen(request, timeout=15) as response:
-        payload = json.load(response)
-    if payload.get("code") != "00000" or not payload.get("data"):
-        raise RuntimeError(f"Bitget demo candle fetch failed: {payload.get('code', 'NO_DATA')}")
-    rows = sorted(payload["data"], key=lambda row: int(row[0]))
+    rows = []
+    remaining = limit
+    end_ms = None
+    while remaining > 0:
+        page_limit = min(1000, remaining)
+        query_params = {"symbol": venue_symbol, "productType": "SUSDT-FUTURES", "granularity": granularity, "limit": str(page_limit)}
+        if end_ms is not None:
+            query_params["endTime"] = str(end_ms)
+        query = urllib.parse.urlencode(query_params)
+        request = urllib.request.Request(f"https://api.bitget.com/api/v2/mix/market/candles?{query}", headers={"User-Agent": "abdalghoniy-paper/0.1"})
+        with urllib.request.urlopen(request, timeout=15) as response:
+            payload = json.load(response)
+        if payload.get("code") != "00000" or not payload.get("data"):
+            raise RuntimeError(f"Bitget demo candle fetch failed: {payload.get('code', 'NO_DATA')}")
+        page = payload["data"]
+        rows.extend(page)
+        remaining -= len(page)
+        if len(page) < page_limit:
+            break
+        end_ms = min(int(row[0]) for row in page) - 1
+    rows = sorted(rows, key=lambda row: int(row[0]))
+    if not rows:
+        raise RuntimeError("Bitget demo candle fetch returned no data")
     target = output or Path("data") / f"{venue_symbol.lower()}_{interval}.csv"
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("w", newline="", encoding="utf-8") as handle:
@@ -151,6 +167,10 @@ def fetch_feature_complete_dataset(symbol: str, interval: str = "1m", limit: int
     timestamps = [row["timestamp"] for row in rows]
     starts = [int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp() * 1000) for value in timestamps]
     fills = fetch_public_fills(venue_symbol, min(starts), max(starts) + _interval_ms(interval))
+    covered_buckets = {int(fill["ts"]) // _interval_ms(interval) * _interval_ms(interval) for fill in fills}
+    missing_buckets = [start for start in starts if start not in covered_buckets]
+    if missing_buckets:
+        raise RuntimeError(f"public fill coverage incomplete: {len(missing_buckets)} of {len(starts)} candles have no fetched fills; refusing incomplete dataset")
     cvd = aggregate_cvd(timestamps, fills, interval)
     if not fills or all(value == 0 for value in cvd):
         raise RuntimeError("public fill data did not produce non-zero CVD; refusing incomplete dataset")
