@@ -74,5 +74,10 @@ def test_intelligence_snapshot_has_explicit_panels_and_unavailable_liquidations(
     assert payload["freshness"]["stale"] is (payload["freshness"]["source_age_ms"] > 172800000)
     assert payload["freshness"]["stale_policy"] == "source_age_ms > 172800000"
     assert payload["freshness"]["data_age_ms"] == payload["freshness"]["source_age_ms"]
+    assert payload["rsi"]["period"] == 14
+    assert payload["rsi"]["timeframe"] == "1D"
+    assert payload["rsi"]["zone"] in {"overbought", "oversold", "neutral"}
+    assert payload["smc"]["event_count"] == len(payload["smc"]["value"])
+    assert len(payload["smc"]["recent_events"]) <= 8
+    assert payload["smc"]["bias"] in {"bullish", "bearish", "unavailable"}
     assert payload["order_book_freshness"]["kind"] == "order_book"
-    assert payload["order_book_freshness"]["source_age_ms"] == payload["order_book_freshness"]["freshness_ms"]

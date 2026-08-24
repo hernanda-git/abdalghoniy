@@ -277,6 +277,45 @@ def _result_payload(result: Any) -> dict:
     return {"available": result.available, "value": result.value, "reason": result.reason}
 
 
+def _rsi_payload(result: Any) -> dict:
+    payload = _result_payload(result)
+    if not result.available or result.value is None:
+        return payload
+    value = float(result.value)
+    if value >= 70:
+        zone, interpretation = "overbought", "strong momentum, elevated mean-reversion risk"
+    elif value <= 30:
+        zone, interpretation = "oversold", "weak momentum, potential exhaustion risk"
+    else:
+        zone, interpretation = "neutral", "no standalone momentum extreme"
+    payload.update({"zone": zone, "interpretation": interpretation, "period": 14, "timeframe": "1D"})
+    return payload
+
+
+def _smc_payload(result: Any, rows: list[DailyCandle]) -> dict:
+    payload = _result_payload(result)
+    events = result.value if result.available else []
+    if not events:
+        payload.update({"event_count": 0, "recent_events": [], "bias": "unavailable"})
+        return payload
+    recent_events = []
+    for event in events[-8:]:
+        item = dict(event.__dict__)
+        if 0 <= event.index < len(rows):
+            item["timestamp_ms"] = int(rows[event.index].timestamp.timestamp() * 1000)
+        recent_events.append(item)
+    latest = events[-1]
+    bias = "bullish" if "BULLISH" in latest.kind else "bearish"
+    payload.update({
+        "event_count": len(events),
+        "recent_events": recent_events,
+        "latest": recent_events[-1],
+        "bias": bias,
+        "timeframe": "1D",
+    })
+    return payload
+
+
 def intelligence_snapshot(symbol: str = "BTCUSDT") -> dict:
     """Return one cached, read-only intelligence snapshot for the demo instrument."""
     with _INTELLIGENCE_LOCK:
@@ -315,8 +354,8 @@ def intelligence_snapshot(symbol: str = "BTCUSDT") -> dict:
                 "symbol": getattr(PublicBitgetMarketData, "venue_symbol", lambda value: value)(symbol),
                 "ranges": {"weekly": [r.__dict__ for r in weekly], "monthly": [r.__dict__ for r in monthly], "yearly": _result_payload(yearly) if yearly else {"available": False, "value": None, "reason": "no daily candles"}, "period_semantics": "observed candles grouped by Monday-Sunday week, calendar month, and calendar year"},
                 "support_resistance": _result_payload(pivots) if pivots else {"available": False, "value": [], "reason": "no daily candles"},
-                "rsi": _result_payload(rsi_result) if rsi_result else {"available": False, "value": None, "reason": "no daily candles"},
-                "smc": _result_payload(smc) if smc else {"available": False, "value": [], "reason": "no daily candles"},
+                "rsi": _rsi_payload(rsi_result) if rsi_result else {"available": False, "value": None, "reason": "no daily candles"},
+                "smc": _smc_payload(smc, rows) if smc else {"available": False, "value": [], "reason": "no daily candles"},
                 "order_book": order_book,
                 "liquidations": dict(PublicLiquidationHeatmapClient().fetch(symbol).__dict__),
                 "freshness": historical_freshness | {"updated_at_ms": updated_at, "method": "rate-budgeted sequential source failover"},
