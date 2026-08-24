@@ -49,7 +49,12 @@ def make_status(root: Path = ROOT) -> dict:
         try:
             marker_data = json.loads(raw_marker)
             tests = marker_data.get('status', 'unknown')
-            verification = marker_data
+            verification = {
+                'status': marker_data.get('status', 'unknown'),
+                'evaluated_at': marker_data.get('evaluated_at'),
+                'commit': marker_data.get('commit'),
+                'checks': {name: {'returncode': value.get('returncode')} for name, value in marker_data.get('checks', {}).items()},
+            }
         except json.JSONDecodeError:
             tests = raw_marker or 'unknown'
     return {
