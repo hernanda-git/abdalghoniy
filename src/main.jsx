@@ -5,6 +5,7 @@ import './styles.css';
 
 const API = { status: '/api/status', market: '/api/market', intelligence: '/api/intelligence' };
 const jakarta = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+const jakartaFull = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'medium' });
 const number = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 
 function formatTime(value) { return value ? jakarta.format(new Date(value)) : 'Unavailable'; }
@@ -44,7 +45,7 @@ function SourceLine({ source = 'Unavailable', method = 'Not supplied', freshness
 function StatePill({ state }) { const tone = state === 'LIVE' ? 'green' : state === 'STALE' || state === 'REST FALLBACK' ? 'amber' : state === 'ERROR' ? 'red' : 'neutral'; return <Badge tone={tone}>{state}</Badge>; }
 function IntelCard({ eyebrow, title, state = 'UNAVAILABLE', source, method, freshness, children }) { return <article className="surface intel-card"><SectionHeading eyebrow={eyebrow} title={title} action={<StatePill state={state} />} />{children ?? <div className="empty-state"><CircleAlert size={17} /><span>Data unavailable. No value rendered without a verified source.</span></div>}<SourceLine source={source} method={method} freshness={freshness} /></article>; }
 function freshnessAge(value) { if (value == null || !Number.isFinite(Number(value))) return 'Unavailable'; const seconds = Math.max(0, Math.round(Number(value) / 1000)); if (seconds < 60) return `${seconds}s ago`; const minutes = Math.round(seconds / 60); if (minutes < 60) return `${minutes}m ago`; return `${Math.floor(minutes / 60)}h ${minutes % 60}m ago`; }
-function freshnessTimestamp(value) { return value == null ? 'Unavailable' : `${formatTime(Number(value))} WIB`; }
+function freshnessTimestamp(value) { return value == null ? 'Unavailable' : `${jakartaFull.format(new Date(Number(value)))} WIB`; }
 function FreshnessCard({ title, data }) { const state = data?.stale ? 'STALE' : data?.freshness_ms == null ? 'UNAVAILABLE' : 'CURRENT'; const tone = state === 'STALE' ? 'amber' : state === 'CURRENT' ? 'green' : 'red'; return <article className={`freshness-card freshness-${tone}`}><div className="freshness-heading"><strong>{title}</strong><Badge tone={tone}>{state}</Badge></div><div className="freshness-details"><span>Age: <strong>{freshnessAge(data?.freshness_ms)}</strong></span><span>Source timestamp: <strong>{freshnessTimestamp(data?.updated_at_ms)}</strong></span><span>Source: <strong>{data?.source ?? 'Unavailable'}</strong></span></div></article>; }
 function FreshnessPanel({ intelligence }) { return <section className="freshness-grid" aria-label="Data freshness"><FreshnessCard title="Historical intelligence" data={intelligence?.freshness} /><FreshnessCard title="Order book" data={intelligence?.order_book_freshness} /></section>; }
 
