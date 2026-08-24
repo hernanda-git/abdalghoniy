@@ -19,3 +19,6 @@ def test_intelligence_snapshot_has_explicit_panels_and_unavailable_liquidations(
     assert set(payload) >= {"ranges", "rsi", "support_resistance", "smc", "order_book", "liquidations", "freshness", "rate_limit"}
     assert payload["liquidations"]["status"] == "unavailable"
     assert payload["order_book"]["status"] == "ok"
+    assert payload["freshness"]["freshness_ms"] is not None
+    assert payload["freshness"]["kind"] == "historical_daily"
+    assert payload["order_book_freshness"]["kind"] == "order_book"

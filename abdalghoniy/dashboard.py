@@ -136,6 +136,11 @@ def health_snapshot() -> dict:
     return _HEALTH_CACHE.get_or_fetch('health', collect, ttl_ms=10000)
 
 
+def public_health_snapshot() -> dict:
+    """Return only safe liveness metadata for the unauthenticated dashboard."""
+    return {"status": "ok", "mode": "paper", "data_plane": "rest"}
+
+
 _MARKET_CACHE = MarketDataCache()
 
 
@@ -210,6 +215,10 @@ def intelligence_snapshot(symbol: str = "BTCUSDT") -> dict:
             if hasattr(order_book, "__dict__"):
                 order_book = dict(order_book.__dict__)
             updated_at = int(rows[-1].timestamp.timestamp() * 1000) if rows else None
+            now_ms = int(time.time() * 1000)
+            historical_freshness_ms = max(0, now_ms - updated_at) if updated_at is not None else None
+            order_book_timestamp = order_book.get("timestamp_ms") if isinstance(order_book, dict) else None
+            order_book_freshness_ms = max(0, now_ms - int(order_book_timestamp)) if order_book_timestamp is not None else None
             return {
                 "symbol": getattr(PublicBitgetMarketData, "venue_symbol", lambda value: value)(symbol),
                 "ranges": {"weekly": [r.__dict__ for r in weekly], "monthly": [r.__dict__ for r in monthly], "yearly": _result_payload(yearly) if yearly else {"available": False, "value": None, "reason": "no daily candles"}, "period_semantics": "observed candles grouped by Monday-Sunday week, calendar month, and calendar year"},
@@ -218,7 +227,8 @@ def intelligence_snapshot(symbol: str = "BTCUSDT") -> dict:
                 "smc": _result_payload(smc) if smc else {"available": False, "value": [], "reason": "no daily candles"},
                 "order_book": order_book,
                 "liquidations": dict(PublicLiquidationHeatmapClient().fetch(symbol).__dict__),
-                "freshness": {"updated_at_ms": updated_at, "freshness_ms": None, "stale": False, "source": source, "method": "rate-budgeted sequential source failover"},
+                "freshness": {"updated_at_ms": updated_at, "freshness_ms": historical_freshness_ms, "stale": historical_freshness_ms is None or historical_freshness_ms > 36 * 60 * 60 * 1000, "source": source, "method": "rate-budgeted sequential source failover", "kind": "historical_daily"},
+                "order_book_freshness": {"updated_at_ms": order_book_timestamp, "freshness_ms": order_book_freshness_ms, "stale": order_book_freshness_ms is None or order_book_freshness_ms > 60 * 1000, "kind": "order_book"},
                 "source_attempts": attempts,
                 "rate_limit": {"policy": "one sequential request per source per refresh; local per-exchange budgets; no credentialed calls"},
             }
@@ -233,6 +243,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', content_type)
         self.send_header('Content-Length', str(len(body)))
         self.send_header('Cache-Control', 'no-store')
+        self.send_header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
+        self.send_header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
+        self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
         self.end_headers()
         self.wfile.write(body)
 
@@ -243,7 +258,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == '/api/status':
             self._send(200, json.dumps(safe_json(make_status())).encode(), 'application/json')
         elif path == '/api/health':
-            self._send(200, json.dumps(safe_json(health_snapshot())).encode(), 'application/json')
+            self._send(200, json.dumps(public_health_snapshot()).encode(), 'application/json')
         elif path == '/api/intelligence':
             self._send(200, json.dumps(safe_json(intelligence_snapshot())).encode(), 'application/json')
         elif path == '/api/market':
@@ -268,6 +283,30 @@ class Handler(BaseHTTPRequestHandler):
                 '.json': 'application/json; charset=utf-8',
             }.get(target.suffix, 'text/plain; charset=utf-8')
             self._send(200, target.read_bytes(), content_type)
+
+    def _method_not_allowed(self) -> None:
+        self.send_response(405)
+        self.send_header('Allow', 'GET')
+        self.send_header('Content-Length', '0')
+        self.end_headers()
+
+    def do_HEAD(self) -> None:
+        self._method_not_allowed()
+
+    def do_OPTIONS(self) -> None:
+        self._method_not_allowed()
+
+    def do_POST(self) -> None:
+        self._method_not_allowed()
+
+    def do_PUT(self) -> None:
+        self._method_not_allowed()
+
+    def do_PATCH(self) -> None:
+        self._method_not_allowed()
+
+    def do_DELETE(self) -> None:
+        self._method_not_allowed()
 
     def log_message(self, fmt, *args):
         return
