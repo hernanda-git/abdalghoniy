@@ -1,4 +1,4 @@
-from abdalghoniy.dashboard import build_freshness
+from abdalghoniy.dashboard import build_freshness, refresh_freshness
 
 
 def test_freshness_separates_source_age_from_request_age_and_applies_policy():
@@ -18,6 +18,36 @@ def test_freshness_separates_source_age_from_request_age_and_applies_policy():
     assert payload["stale"] is False
     assert payload["stale_policy"] == "source_age_ms > 86400000"
     assert payload["kind"] == "historical_daily"
+
+
+def test_cached_freshness_recomputes_request_age_and_stale_state():
+    cached = {
+        "freshness": build_freshness(
+            source_updated_at_ms=1_700_000_000_000,
+            fetched_at_ms=1_700_000_000_000,
+            now_ms=1_700_000_000_000,
+            kind="historical_daily",
+            source="Hyperliquid",
+            stale_after_ms=86_400_000,
+        ),
+        "order_book_freshness": build_freshness(
+            source_updated_at_ms=1_700_000_000_000,
+            fetched_at_ms=1_700_000_000_000,
+            now_ms=1_700_000_000_000,
+            kind="order_book",
+            source="Bitget",
+            stale_after_ms=60_000,
+        ),
+    }
+
+    refreshed = refresh_freshness(cached, 1_700_000_120_000)
+
+    assert refreshed["freshness"]["request_age_ms"] == 120_000
+    assert refreshed["freshness"]["source_age_ms"] == 120_000
+    assert refreshed["freshness"]["stale"] is False
+    assert refreshed["order_book_freshness"]["request_age_ms"] == 120_000
+    assert refreshed["order_book_freshness"]["stale"] is True
+    assert cached["freshness"]["request_age_ms"] == 0
 
 
 def test_intelligence_snapshot_has_explicit_panels_and_unavailable_liquidations(monkeypatch):

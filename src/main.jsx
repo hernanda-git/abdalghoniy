@@ -4,6 +4,10 @@ import { Activity, ArrowUpRight, BarChart3, Check, CircleAlert, Clock3, Gauge, L
 import './styles.css';
 
 const API = { status: '/api/status', market: '/api/market', intelligence: '/api/intelligence' };
+const LIGHT_POLL_MS = 8000;
+const INTELLIGENCE_POLL_MS = 30000;
+const MAX_LIGHT_BACKOFF_MS = 120000;
+const MAX_INTELLIGENCE_BACKOFF_MS = 300000;
 const jakarta = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 const jakartaFull = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'medium' });
 const number = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
@@ -66,64 +70,89 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [lastErrorAt, setLastErrorAt] = useState(null);
   const [rateLimited, setRateLimited] = useState(null);
-  const lightBackoff = useRef(5000);
-  const intelligenceBackoff = useRef(30000);
+  const latestMarketPrice = useRef(null);
 
   async function fetchJson(endpoint) {
     const response = await fetch(endpoint, { cache: 'no-store' });
     if (response.ok) return response.json();
-    const retryAfter = response.status === 429 ? Number(response.headers.get('Retry-After')) : null;
+    const retryAfterHeader = response.status === 429 ? response.headers.get('Retry-After') : null;
+    const retryAfterSeconds = retryAfterHeader && /^\d+$/.test(retryAfterHeader.trim()) ? Number(retryAfterHeader) : null;
+    const retryAfterDate = retryAfterHeader && retryAfterSeconds == null ? Date.parse(retryAfterHeader) : NaN;
+    const retryAfterMs = retryAfterSeconds != null
+      ? retryAfterSeconds * 1000
+      : Number.isFinite(retryAfterDate) ? Math.max(0, retryAfterDate - Date.now()) : null;
     const error = new Error(`${endpoint} request failed (${response.status})`);
-    error.retryAfterMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : null;
+    error.retryAfterMs = retryAfterMs;
     error.rateLimited = response.status === 429;
     throw error;
   }
 
   function recordError(caught, endpoint) {
     const message = caught instanceof Error ? caught.message : 'Connection error';
-    setError(message); setLastErrorAt(Date.now());
+    setError({ endpoint, message }); setLastErrorAt(Date.now());
     if (caught?.rateLimited) setRateLimited({ endpoint, retryAfterMs: caught.retryAfterMs });
   }
 
-  async function refreshLight() {
+  function clearEndpointStatus(endpoint) {
+    setError(previous => previous?.endpoint === endpoint ? null : previous);
+    setRateLimited(previous => previous?.endpoint === endpoint ? null : previous);
+  }
+
+  function applyMarket(marketResponse) {
+    setMarket(marketResponse);
+    latestMarketPrice.current = marketResponse?.ok && marketResponse.price != null ? Number(marketResponse.price) : null;
+    if (marketResponse?.ok && marketResponse.price != null) setHistory(previous => [...previous, Number(marketResponse.price)].slice(-32));
+  }
+
+  function applyIntelligence(intelligenceResponse) {
+    setIntelligence(intelligenceResponse);
+    const book = intelligenceResponse?.order_book;
+    setChartHistory(previous => [...previous, { price: latestMarketPrice.current, imbalance: Number(book?.imbalance), spread: Number(book?.spread) }].filter(item => Object.values(item).every(Number.isFinite)).slice(-48));
+  }
+
+  async function refreshEndpoint(endpoint, name, onSuccess) {
+    try {
+      const response = await fetchJson(endpoint);
+      onSuccess(response);
+      clearEndpointStatus(name);
+      setUpdatedAt(Date.now());
+      setLoading(false);
+      return { ok: true };
+    } catch (caught) {
+      recordError(caught, name);
+      return { ok: false, error: caught };
+    }
+  }
+
+  async function refresh() {
     const started = performance.now();
-    try {
-      const [statusResponse, marketResponse, healthResponse] = await Promise.all([fetchJson(API.status), fetchJson(API.market), fetchJson('/api/health')]);
-      setStatus(statusResponse); setMarket(marketResponse); setHealth(healthResponse); setError(null); setRateLimited(null); setUpdatedAt(Date.now()); setLatency(Math.round(performance.now() - started));
-      if (marketResponse?.ok && marketResponse.price != null) setHistory(previous => [...previous, Number(marketResponse.price)].slice(-32));
-      lightBackoff.current = 5000;
-      return 5000;
-    } catch (caught) {
-      recordError(caught, 'status/market/health');
-      const delay = caught?.retryAfterMs ?? Math.min(lightBackoff.current * 2, 120000);
-      lightBackoff.current = delay;
-      return delay + Math.round(Math.random() * 1000);
-    }
+    setLoading(true);
+    await Promise.all([
+      refreshEndpoint(API.status, 'status', setStatus),
+      refreshEndpoint(API.market, 'market', applyMarket),
+      refreshEndpoint('/api/health', 'health', setHealth),
+      refreshEndpoint(API.intelligence, 'intelligence', applyIntelligence),
+    ]);
+    setLatency(Math.round(performance.now() - started));
+    setLoading(false);
   }
-
-  async function refreshIntelligence() {
-    try {
-      const intelligenceResponse = await fetchJson(API.intelligence);
-      setIntelligence(intelligenceResponse); setRateLimited(null); intelligenceBackoff.current = 30000;
-      const book = intelligenceResponse?.order_book;
-      setChartHistory(previous => [...previous, { price: Number(market?.price), imbalance: Number(book?.imbalance), spread: Number(book?.spread) }].filter(item => Object.values(item).every(Number.isFinite)).slice(-48));
-      return 30000;
-    } catch (caught) {
-      recordError(caught, 'intelligence');
-      const delay = caught?.retryAfterMs ?? Math.min(intelligenceBackoff.current * 2, 300000);
-      intelligenceBackoff.current = delay;
-      return delay + Math.round(Math.random() * 2000);
-    }
-  }
-
-  async function refresh() { setLoading(true); await Promise.all([refreshLight(), refreshIntelligence()]); setLoading(false); }
 
   useEffect(() => {
-    let cancelled = false; let lightTimer; let intelligenceTimer;
-    const scheduleLight = async () => { const delay = await refreshLight(); if (!cancelled) lightTimer = setTimeout(scheduleLight, delay); };
-    const scheduleIntelligence = async () => { const delay = await refreshIntelligence(); if (!cancelled) intelligenceTimer = setTimeout(scheduleIntelligence, delay); };
-    scheduleLight(); scheduleIntelligence();
-    return () => { cancelled = true; clearTimeout(lightTimer); clearTimeout(intelligenceTimer); };
+    let cancelled = false;
+    const jobs = [
+      { endpoint: API.status, name: 'status', onSuccess: setStatus, base: LIGHT_POLL_MS, max: MAX_LIGHT_BACKOFF_MS, delay: LIGHT_POLL_MS, timer: null },
+      { endpoint: API.market, name: 'market', onSuccess: applyMarket, base: LIGHT_POLL_MS, max: MAX_LIGHT_BACKOFF_MS, delay: LIGHT_POLL_MS, timer: null },
+      { endpoint: '/api/health', name: 'health', onSuccess: setHealth, base: LIGHT_POLL_MS, max: MAX_LIGHT_BACKOFF_MS, delay: LIGHT_POLL_MS, timer: null },
+      { endpoint: API.intelligence, name: 'intelligence', onSuccess: applyIntelligence, base: INTELLIGENCE_POLL_MS, max: MAX_INTELLIGENCE_BACKOFF_MS, delay: INTELLIGENCE_POLL_MS, timer: null },
+    ];
+    const schedule = async job => {
+      const result = await refreshEndpoint(job.endpoint, job.name, job.onSuccess);
+      if (result.ok) job.delay = job.base;
+      else job.delay = result.error?.retryAfterMs ?? Math.min(job.delay * 2, job.max);
+      if (!cancelled) job.timer = setTimeout(() => schedule(job), job.delay + Math.round(Math.random() * 1000));
+    };
+    jobs.forEach(schedule);
+    return () => { cancelled = true; jobs.forEach(job => clearTimeout(job.timer)); };
   }, []);
   useEffect(() => {
     setStreamConnected(false);
@@ -148,7 +177,7 @@ function App() {
     <aside className="rail"><div className="rail-brand"><div className="brand-glyph">A</div><div><span className="rail-kicker">Research</span><strong>ABDALGHONIY</strong></div></div><nav className="rail-nav" aria-label="Dashboard sections"><a className="active" href="#overview"><Activity size={16} />Overview</a><a href="#market"><BarChart3 size={16} />Market feed</a><a href="#intelligence"><Gauge size={16} />Intelligence</a><a href="#validation"><ShieldCheck size={16} />Validation</a><a href="#reports"><ArrowUpRight size={16} />Reports</a></nav><div className="rail-footer"><div className="rail-status"><span className={`status-light ${live ? '' : 'offline'}`} />{streamConnected ? 'Live socket' : live ? 'REST fallback' : 'Feed unavailable'}</div><span>v1 · paper</span></div></aside>
     <main className="content" id="overview">
       <header className="page-head"><div><div className="breadcrumb">ABDALGHONIY / MONITOR</div><h1>Research overview</h1><p>One screen for market state, safety posture, and evidence.</p></div><div className="head-actions"><Badge tone="green"><span className="status-light" />PAPER ONLY</Badge><button className="icon-button" onClick={refresh} aria-label="Refresh dashboard"><RefreshCw size={16} /></button></div></header>
-      {error && <div className="notice notice-error"><CircleAlert size={16} />{error}{lastErrorAt && ` · last error ${formatTime(lastErrorAt)}`}</div>}
+      {error && <div className="notice notice-error"><CircleAlert size={16} />{error.message}{lastErrorAt && ` · last error ${formatTime(lastErrorAt)}`}</div>}
       {rateLimited && <div className="notice notice-warn"><Clock3 size={16} />Dashboard rate limited {rateLimited.endpoint}; backing off{rateLimited.retryAfterMs ? ` for ${Math.ceil(rateLimited.retryAfterMs / 1000)}s` : ''}. Exchange feeds are not being declared rate limited.</div>}
       {streamError && !error && <div className="notice notice-warn"><CircleAlert size={16} />{streamError}</div>}
       <section className="overview-grid"><article className="surface market-surface" id="market"><SectionHeading eyebrow="SUSDT-FUTURES · PUBLIC" title="Market pulse" action={<StatePill state={feedState} />} /><div className="market-main"><div><span className="instrument">{market?.symbol ?? 'SBTCSUSDT'}</span><div className="market-price">{formatPrice(market?.price)}</div><div className={`market-change ${Number(market?.change24h) < 0 ? 'negative' : ''}`}>{market?.change24h ? `${(Number(market.change24h) * 100).toFixed(2)}% 24h` : 'Waiting for feed'}</div></div><svg className="sparkline" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Recent price movement"><polyline points={chartPoints || '0,80 25,55 50,66 75,35 100,45'} /></svg></div><div className="market-foot"><div><span>24h high</span><strong>{formatPrice(market?.high24h)}</strong></div><div><span>24h low</span><strong>{formatPrice(market?.low24h)}</strong></div><div><span>Last tick</span><strong>{market?.ts ? formatTime(Number(market.ts)) : 'Unavailable'}</strong></div></div><SourceLine source={market?.source ?? 'Unavailable'} method={streamConnected ? 'Public WebSocket ticker' : 'REST snapshot'} freshness={freshness} /></article><article className="surface posture-surface"><SectionHeading eyebrow="GUARDRAILS" title="Safety posture" action={<Gauge size={18} className="muted-icon" />} /><div className="hero-state"><div className={`state-mark ${halted ? 'danger' : ''}`}>{halted ? <CircleAlert size={23} /> : <ShieldCheck size={23} />}</div><div><strong>{runtimeSafety ? (halted ? 'Halted' : 'Armed') : 'Policy only'}</strong><span>{runtimeSafety ? (halted ? 'New risk is blocked' : 'Runtime safety state active') : 'Runtime kill-switch state unavailable'}</span></div></div><div className="posture-list"><div><span>Live orders</span><Badge tone="green">Disabled</Badge></div><div><span>Hard stop</span><Badge tone="green">Required</Badge></div><div><span>Daily breaker</span><Badge tone="green">Enabled</Badge></div><div><span>Max leverage</span><strong>3×</strong></div></div></article></section>

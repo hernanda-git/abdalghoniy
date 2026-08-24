@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import re
@@ -203,6 +204,27 @@ def build_freshness(*, source_updated_at_ms: int | None, fetched_at_ms: int,
     }
 
 
+def refresh_freshness(payload: dict[str, Any], now_ms: int) -> dict[str, Any]:
+    """Refresh request-age and stale state for a cached intelligence payload."""
+    result = copy.deepcopy(payload)
+    policies = {
+        "freshness": HISTORICAL_DAILY_STALE_AFTER_MS,
+        "order_book_freshness": ORDER_BOOK_STALE_AFTER_MS,
+    }
+    for key, stale_after_ms in policies.items():
+        freshness = result.get(key)
+        if not isinstance(freshness, dict):
+            continue
+        fetched_at_ms = freshness.get("fetched_at_ms")
+        source_updated_at_ms = freshness.get("source_updated_at_ms", freshness.get("updated_at_ms"))
+        freshness["request_age_ms"] = max(0, now_ms - int(fetched_at_ms)) if fetched_at_ms is not None else None
+        freshness["source_age_ms"] = max(0, now_ms - int(source_updated_at_ms)) if source_updated_at_ms is not None else None
+        freshness["freshness_ms"] = freshness["source_age_ms"]
+        freshness["data_age_ms"] = freshness["source_age_ms"]
+        freshness["stale"] = freshness["source_age_ms"] is None or freshness["source_age_ms"] > stale_after_ms
+    return result
+
+
 def _allow_request(client: str) -> bool:
     now = time.monotonic()
     with _REQUEST_LOCK:
@@ -302,7 +324,8 @@ def intelligence_snapshot(symbol: str = "BTCUSDT") -> dict:
                 "source_attempts": attempts,
                 "rate_limit": {"policy": "one sequential request per source per refresh; local per-exchange budgets; no credentialed calls"},
             }
-        return _INTELLIGENCE_CACHE.get_or_fetch(f"intelligence:{symbol}", fetch, ttl_ms=15000)
+        cached = _INTELLIGENCE_CACHE.get_or_fetch(f"intelligence:{symbol}", fetch, ttl_ms=15000)
+        return refresh_freshness(cached, int(time.time() * 1000))
 
 
 class Handler(BaseHTTPRequestHandler):
