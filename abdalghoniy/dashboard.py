@@ -227,8 +227,8 @@ def intelligence_snapshot(symbol: str = "BTCUSDT") -> dict:
                 "smc": _result_payload(smc) if smc else {"available": False, "value": [], "reason": "no daily candles"},
                 "order_book": order_book,
                 "liquidations": dict(PublicLiquidationHeatmapClient().fetch(symbol).__dict__),
-                "freshness": {"updated_at_ms": updated_at, "freshness_ms": historical_freshness_ms, "stale": historical_freshness_ms is None or historical_freshness_ms > 36 * 60 * 60 * 1000, "source": source, "method": "rate-budgeted sequential source failover", "kind": "historical_daily"},
-                "order_book_freshness": {"updated_at_ms": order_book_timestamp, "freshness_ms": order_book_freshness_ms, "stale": order_book_freshness_ms is None or order_book_freshness_ms > 60 * 1000, "kind": "order_book"},
+                "freshness": {"updated_at_ms": updated_at, "freshness_ms": historical_freshness_ms, "stale": historical_freshness_ms is None or historical_freshness_ms > 6 * 60 * 60 * 1000, "source": source, "method": "rate-budgeted sequential source failover", "kind": "historical_daily"},
+                "order_book_freshness": {"updated_at_ms": order_book_timestamp, "freshness_ms": order_book_freshness_ms, "stale": order_book_freshness_ms is None or order_book_freshness_ms > 60 * 1000, "source": "Bitget public · SUSDT-FUTURES", "kind": "order_book"},
                 "source_attempts": attempts,
                 "rate_limit": {"policy": "one sequential request per source per refresh; local per-exchange budgets; no credentialed calls"},
             }
