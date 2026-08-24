@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from .backtest import counter_trend_diagnostics, replay_counter_trend
 from .config import AppConfig
-from .data import fetch_demo_candles, load_csv
+from .data import fetch_demo_candles, fetch_feature_complete_dataset, load_csv
 from .dashboard import make_status
 from .fees import CostModel
 from .ledger import DurableLedger
@@ -123,6 +123,13 @@ def _live_shadow(args) -> int:
     return 0
 
 
+def _feature_dataset(args) -> int:
+    path = fetch_feature_complete_dataset(args.symbol, args.interval, args.limit, args.output)
+    dataset = load_csv(path)
+    print(json.dumps({"dataset": str(path), "rows": len(dataset.candles), "cvd_nonzero": sum(1 for value in dataset.cvd_changes if value != 0), "funding_nonzero": sum(1 for value in dataset.funding_bps if value != 0), "dataset_hash": dataset.sha256}, indent=2))
+    return 0
+
+
 def _report(args) -> int:
     path = args.output_dir / "latest.json"
     if not path.exists():
@@ -156,6 +163,11 @@ def main(argv=None) -> int:
     live_shadow.add_argument("--event-path", type=Path, required=True)
     live_shadow.add_argument("--iterations", type=int, default=1)
     live_shadow.add_argument("--sleep", type=float, default=1.0)
+    feature_dataset = sub.add_parser("feature-dataset", help="build a dataset with public fill CVD and historical funding")
+    feature_dataset.add_argument("--symbol", required=True)
+    feature_dataset.add_argument("--interval", default="1m")
+    feature_dataset.add_argument("--limit", type=int, default=100)
+    feature_dataset.add_argument("--output", type=Path, default=None)
     args = parser.parse_args(argv)
     cfg = AppConfig.from_yaml(args.config)
     if args.command == "replay":
@@ -166,6 +178,8 @@ def main(argv=None) -> int:
         return _shadow(args)
     if args.command == "live-shadow":
         return _live_shadow(args)
+    if args.command == "feature-dataset":
+        return _feature_dataset(args)
     if args.status:
         print(json.dumps({"config": {"mode": cfg.mode, "max_leverage": str(cfg.max_leverage), "max_drawdown": str(cfg.max_drawdown), "max_position_notional": str(cfg.max_position_notional)}, "status": make_status(Path.cwd())}, indent=2))
     else:
