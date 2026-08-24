@@ -21,5 +21,6 @@ def test_intelligence_snapshot_has_explicit_panels_and_unavailable_liquidations(
     assert payload["order_book"]["status"] == "ok"
     assert payload["freshness"]["freshness_ms"] is not None
     assert payload["freshness"]["kind"] == "historical_daily"
-    assert payload["freshness"]["stale"] is True
+    assert payload["freshness"]["stale"] is False
+    assert payload["freshness"]["data_age_ms"] is not None
     assert payload["order_book_freshness"]["kind"] == "order_book"

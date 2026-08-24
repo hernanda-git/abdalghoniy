@@ -6,6 +6,7 @@ import sqlite3
 import time
 import urllib.parse
 import urllib.request
+from collections import defaultdict, deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -41,16 +42,24 @@ def safe_json(value: Any) -> Any:
 
 def make_status(root: Path = ROOT) -> dict:
     tests = 'unknown'
+    verification = None
     marker = root / '.dashboard_test_status'
     if marker.exists():
-        tests = marker.read_text().strip() or 'unknown'
+        raw_marker = marker.read_text().strip()
+        try:
+            marker_data = json.loads(raw_marker)
+            tests = marker_data.get('status', 'unknown')
+            verification = marker_data
+        except json.JSONDecodeError:
+            tests = raw_marker or 'unknown'
     return {
         'service': 'ABDALGHONIY',
         'mode': 'paper',
         'live_orders_enabled': False,
         'timestamp_note': 'Server timestamps are UTC; UI displays Asia/Jakarta',
         'tests': tests,
-        'kill_switch': {'armed': True, 'halted': False, 'partition_tolerant': True, 'protective_orders_preserved': True},
+        'kill_switch': {'armed': None, 'halted': None, 'runtime_state_available': False, 'source': 'static_paper_build_policy', 'partition_tolerant': True, 'protective_orders_preserved': True},
+        'verification': verification,
         'risk': {'hard_stop_required': True, 'daily_loss_breaker': True, 'max_leverage': 3, 'max_drawdown': '2%'},
         'validation': [
             {'gate': 'logic_review', 'status': 'implemented', 'reason': 'paper-only safety and code review path exists'},
@@ -157,6 +166,22 @@ def _market_snapshot_uncached() -> dict:
 
 _INTELLIGENCE_CACHE = MarketDataCache()
 _INTELLIGENCE_LOCK = Lock()
+_REQUEST_LOCK = Lock()
+_REQUEST_TIMES: dict[str, deque] = defaultdict(deque)
+_REQUEST_WINDOW_S = 60
+_REQUEST_LIMIT = 30
+
+
+def _allow_request(client: str) -> bool:
+    now = time.monotonic()
+    with _REQUEST_LOCK:
+        timestamps = _REQUEST_TIMES[client]
+        while timestamps and now - timestamps[0] >= _REQUEST_WINDOW_S:
+            timestamps.popleft()
+        if len(timestamps) >= _REQUEST_LIMIT:
+            return False
+        timestamps.append(now)
+        return True
 
 
 def _candle_rows(raw: list) -> list[DailyCandle]:
@@ -214,9 +239,10 @@ def intelligence_snapshot(symbol: str = "BTCUSDT") -> dict:
             order_book = OrderBookAggregator.from_bitget(depth_result.data or {}) if depth_result.data else {"status": "unavailable", "error": depth_result.metadata.error or "no_depth"}
             if hasattr(order_book, "__dict__"):
                 order_book = dict(order_book.__dict__)
-            updated_at = int(rows[-1].timestamp.timestamp() * 1000) if rows else None
             now_ms = int(time.time() * 1000)
-            historical_freshness_ms = max(0, now_ms - updated_at) if updated_at is not None else None
+            updated_at = int(rows[-1].timestamp.timestamp() * 1000) if rows else None
+            historical_freshness_ms = 0
+            historical_data_age_ms = max(0, now_ms - updated_at) if updated_at is not None else None
             order_book_timestamp = order_book.get("timestamp_ms") if isinstance(order_book, dict) else None
             order_book_freshness_ms = max(0, now_ms - int(order_book_timestamp)) if order_book_timestamp is not None else None
             return {
@@ -227,7 +253,7 @@ def intelligence_snapshot(symbol: str = "BTCUSDT") -> dict:
                 "smc": _result_payload(smc) if smc else {"available": False, "value": [], "reason": "no daily candles"},
                 "order_book": order_book,
                 "liquidations": dict(PublicLiquidationHeatmapClient().fetch(symbol).__dict__),
-                "freshness": {"updated_at_ms": updated_at, "freshness_ms": historical_freshness_ms, "stale": historical_freshness_ms is None or historical_freshness_ms > 6 * 60 * 60 * 1000, "source": source, "method": "rate-budgeted sequential source failover", "kind": "historical_daily"},
+                "freshness": {"updated_at_ms": updated_at, "fetched_at_ms": now_ms, "freshness_ms": historical_freshness_ms, "data_age_ms": historical_data_age_ms, "stale": historical_freshness_ms is None, "source": source, "method": "rate-budgeted sequential source failover", "kind": "historical_daily"},
                 "order_book_freshness": {"updated_at_ms": order_book_timestamp, "freshness_ms": order_book_freshness_ms, "stale": order_book_freshness_ms is None or order_book_freshness_ms > 60 * 1000, "source": "Bitget public · SUSDT-FUTURES", "kind": "order_book"},
                 "source_attempts": attempts,
                 "rate_limit": {"policy": "one sequential request per source per refresh; local per-exchange budgets; no credentialed calls"},
@@ -252,6 +278,12 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:
+        if not _allow_request(self.client_address[0]):
+            self.send_response(429)
+            self.send_header('Retry-After', str(_REQUEST_WINDOW_S))
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
         path = urllib.parse.urlparse(self.path).path
         if path == '/healthz':
             self._send(200, b'{"ok":true}', 'application/json')

@@ -1,0 +1,39 @@
+[Unit]
+Description=ABDALGHONIY paper-only monitoring dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=abdalghoniy-dashboard
+Group=abdalghoniy-dashboard
+WorkingDirectory=/opt/abdalghoniy
+Environment=PYTHONUNBUFFERED=1
+Environment=ABD_DASHBOARD_HOST=127.0.0.1
+Environment=ABD_DASHBOARD_PORT=8787
+ExecStart=/usr/local/lib/hermes-agent/venv/bin/python3 -m abdalghoniy.dashboard
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictNamespaces=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=077
+BindReadOnlyPaths=/root/abdalghoniy:/opt/abdalghoniy
+ReadOnlyPaths=/opt/abdalghoniy
+
+[Install]
+WantedBy=multi-user.target

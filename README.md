@@ -30,8 +30,8 @@ The paper-only dashboard is deployed at [ag.warga-digital.com](https://ag.warga-
 
 On the VPS:
 
-- `abdalghoniy-dashboard.service` serves the dashboard on `127.0.0.1:8787`.
-- `abdalghoniy-verify.timer` runs the offline test suite every 15 minutes and updates an ignored status marker.
+- `abdalghoniy-dashboard.service` serves the dashboard on `127.0.0.1:8787` as the dedicated non-root `abdalghoniy-dashboard` user through a read-only bind mount.
+- `abdalghoniy-verify.timer` runs pytest, Python compilation, the frontend build, and a local health-schema smoke test every 15 minutes. It records Jakarta evaluation time, commit, and per-check results in the ignored status marker.
 - Nginx terminates HTTPS for `ag.warga-digital.com` using a Let's Encrypt certificate.
 
 The project remains `paper` mode. Missing validation evidence, live shadow data, exchange credentials, venue behavior drills, and micro-live approval are intentionally surfaced as blocked, not hidden.
