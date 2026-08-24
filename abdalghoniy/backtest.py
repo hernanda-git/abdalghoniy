@@ -17,6 +17,54 @@ class Trade:
     funding: Decimal = Decimal("0")
 
 
+def counter_trend_diagnostics(candles: Iterable[Candle], cvd_changes: Iterable[Decimal], config: CounterTrendConfig, funding_bps: Optional[Iterable[Decimal]] = None) -> dict:
+    bars = list(candles)
+    cvds = list(cvd_changes)
+    funding = list(funding_bps) if funding_bps is not None else [Decimal('0')] * len(bars)
+    if len(cvds) != len(bars) or len(funding) != len(bars):
+        raise ValueError('market features must align with candles')
+    result = {
+        'rows': len(bars),
+        'usable_signal_rows': max(0, len(bars) - 2),
+        'cvd_nonzero': sum(1 for value in cvds if value != 0),
+        'funding_nonzero': sum(1 for value in funding if value != 0),
+        'funding_rejects': 0,
+        'momentum_up': 0,
+        'momentum_down': 0,
+        'momentum_neutral': 0,
+        'momentum_abs_ge_threshold': 0,
+        'blocked_by_cvd': 0,
+        'candidate_signals': 0,
+    }
+    for i in range(1, len(bars) - 1):
+        if abs(funding[i]) > config.max_funding_abs_bps:
+            result['funding_rejects'] += 1
+            continue
+        previous, current = bars[i - 1], bars[i]
+        if previous.close <= 0:
+            result['momentum_neutral'] += 1
+            continue
+        momentum_bps = (current.close - previous.close) / previous.close * Decimal('10000')
+        if abs(momentum_bps) >= config.momentum_bps:
+            result['momentum_abs_ge_threshold'] += 1
+        direction = 'short' if momentum_bps >= config.momentum_bps else 'long' if momentum_bps <= -config.momentum_bps else None
+        if direction == 'short':
+            result['momentum_up'] += 1
+            signal = cvds[i] <= -config.min_cvd_reversal
+        elif direction == 'long':
+            result['momentum_down'] += 1
+            signal = cvds[i] >= config.min_cvd_reversal
+        else:
+            result['momentum_neutral'] += 1
+            continue
+        if signal:
+            result['candidate_signals'] += 1
+        else:
+            result['blocked_by_cvd'] += 1
+    result['cvd_missing_all'] = result['cvd_nonzero'] == 0
+    return result
+
+
 def replay_counter_trend(candles: Iterable[Candle], cvd_changes: Iterable[Decimal], model: CostModel, config: CounterTrendConfig, stop_distance: Decimal, target_distance: Decimal, max_hold: int = 5, funding_bps: Optional[Iterable[Decimal]] = None) -> List[Trade]:
     bars = list(candles)
     cvds = list(cvd_changes)

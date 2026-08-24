@@ -6,7 +6,7 @@ from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .backtest import replay_counter_trend
+from .backtest import counter_trend_diagnostics, replay_counter_trend
 from .config import AppConfig
 from .data import fetch_demo_candles, load_csv
 from .dashboard import make_status
@@ -52,6 +52,7 @@ def _replay(args, cfg: AppConfig) -> int:
         max_hold=args.max_hold,
         funding_bps=dataset.funding_bps,
     )
+    diagnostics = counter_trend_diagnostics(dataset.candles, dataset.cvd_changes, CounterTrendConfig(), dataset.funding_bps)
     gross = sum(((t.entry - t.exit) * t.quantity if t.direction == "short" else (t.exit - t.entry) * t.quantity for t in trades), Decimal("0"))
     net = sum((t.net for t in trades), Decimal("0"))
     funding_total = sum((t.funding for t in trades), Decimal("0"))
@@ -71,6 +72,7 @@ def _replay(args, cfg: AppConfig) -> int:
         "funding": _decimal(funding_total),
         "net_pnl": _decimal(net),
         "expectancy": _decimal(net / Decimal(len(trades))) if trades else None,
+        "diagnostics": diagnostics,
         "trades": [
             {"direction": t.direction, "entry": _decimal(t.entry), "exit": _decimal(t.exit), "quantity": _decimal(t.quantity), "net": _decimal(t.net), "funding": _decimal(t.funding), "bars_held": t.bars_held}
             for t in trades

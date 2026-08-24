@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from abdalghoniy.backtest import replay_counter_trend
+from abdalghoniy.backtest import counter_trend_diagnostics, replay_counter_trend
 from abdalghoniy.fees import CostModel
 from abdalghoniy.strategies import Candle, CounterTrendConfig
 
@@ -20,3 +20,13 @@ def test_replay_charges_funding_in_net_pnl():
     assert no_funding[0].direction == "short"
     assert with_funding[0].funding == Decimal("0.102")
     assert with_funding[0].net == no_funding[0].net + Decimal("0.102")
+
+
+def test_counter_trend_diagnostics_identifies_missing_cvd_and_threshold_blockers():
+    bars = [Candle("100", "100.1", "99.9", "100", "1"), Candle("100", "100.2", "99.9", "100.1", "1"), Candle("100.1", "100.3", "100", "100.2", "1")]
+    result = counter_trend_diagnostics(bars, [Decimal("0")] * 3, CounterTrendConfig())
+    assert result["rows"] == 3
+    assert result["cvd_nonzero"] == 0
+    assert result["momentum_abs_ge_threshold"] == 0
+    assert result["blocked_by_cvd"] == 0
+    assert result["candidate_signals"] == 0
