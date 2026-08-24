@@ -316,6 +316,36 @@ def _smc_payload(result: Any, rows: list[DailyCandle]) -> dict:
     return payload
 
 
+def _timeframe_snapshot(symbol: str, granularity: str, limit: int = 200) -> dict:
+    """Return read-only intraday context from the public Bitget candle endpoint."""
+    result = PublicBitgetMarketData().candles(symbol, granularity=granularity, limit=limit)
+    rows = _candle_rows(result.data or []) if not getattr(result.metadata, "unavailable", False) else []
+    source_updated_at = result.metadata.updated_at_ms
+    now_ms = int(time.time() * 1000)
+    freshness = build_freshness(
+        source_updated_at_ms=source_updated_at,
+        fetched_at_ms=now_ms,
+        now_ms=now_ms,
+        kind=f"derived_indicator_{granularity.lower()}",
+        source="Bitget public · SUSDT-FUTURES",
+        stale_after_ms=120_000,
+    )
+    if not rows:
+        return {"available": False, "timeframe": granularity, "reason": result.metadata.error or "no_data", "freshness": freshness}
+    rsi_result = rsi(rows, period=14)
+    smc_result = smc_events(rows, left=2, right=2)
+    pivots = pivot_clusters(rows, left=2, right=2)
+    return {
+        "available": True,
+        "timeframe": granularity,
+        "candles": len(rows),
+        "rsi": _rsi_payload(rsi_result),
+        "smc": _smc_payload(smc_result, rows),
+        "levels": _result_payload(pivots),
+        "freshness": freshness,
+    }
+
+
 def intelligence_snapshot(symbol: str = "BTCUSDT") -> dict:
     """Return one cached, read-only intelligence snapshot for the demo instrument."""
     with _INTELLIGENCE_LOCK:
@@ -356,6 +386,11 @@ def intelligence_snapshot(symbol: str = "BTCUSDT") -> dict:
                 "support_resistance": _result_payload(pivots) if pivots else {"available": False, "value": [], "reason": "no daily candles"},
                 "rsi": _rsi_payload(rsi_result) if rsi_result else {"available": False, "value": None, "reason": "no daily candles"},
                 "smc": _smc_payload(smc, rows) if smc else {"available": False, "value": [], "reason": "no daily candles"},
+                "multi_timeframe": {
+                    "1D": {"available": bool(rows), "timeframe": "1D", "rsi": _rsi_payload(rsi_result) if rsi_result else {"available": False}, "smc": _smc_payload(smc, rows) if smc else {"available": False}, "freshness": historical_freshness},
+                    "4H": _timeframe_snapshot(symbol, "4H"),
+                    "1H": _timeframe_snapshot(symbol, "1H"),
+                },
                 "order_book": order_book,
                 "liquidations": dict(PublicLiquidationHeatmapClient().fetch(symbol).__dict__),
                 "freshness": historical_freshness | {"updated_at_ms": updated_at, "method": "rate-budgeted sequential source failover"},
