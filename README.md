@@ -35,3 +35,5 @@ On the VPS:
 - Nginx terminates HTTPS for `ag.warga-digital.com` using a Let's Encrypt certificate.
 
 The project remains `paper` mode. Missing validation evidence, live shadow data, exchange credentials, venue behavior drills, and micro-live approval are intentionally surfaced as blocked, not hidden.
+
+The current research redesign adds canonical event storage, public-wallet quality scoring, consensus and copyability filters, regime arbitration, runtime safety telemetry, and a `$10` default notional cap. These components are research infrastructure only until the validation ladder produces positive out-of-sample evidence.
