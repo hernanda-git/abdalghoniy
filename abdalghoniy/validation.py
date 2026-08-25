@@ -1,4 +1,5 @@
 import json
+from .evaluation import deflated_sharpe, random_control, walk_forward
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import List, Tuple
@@ -63,14 +64,16 @@ def evaluate_replay(returns, sample_count: int) -> dict:
     lower = wilson_lower_bound(wins, trade_count) if trade_count else Decimal("0")
     splits = purged_splits(sample_count) if sample_count >= 5 else []
     enough = trade_count >= 30
+    control = random_control(values) if values else []
+    folds = walk_forward(values) if enough else []
     return {
         "status": "research_only" if enough else "insufficient_evidence",
         "trade_count": trade_count,
         "mean_return": str(sum(values, Decimal("0")) / Decimal(trade_count)) if values else None,
         "purged_cv": {"status": "not_passed" if not enough else "implemented_not_passed", "folds": len(splits), "purge": 1, "embargo": 1},
-        "deflated_metric": {"status": "not_passed", "reason": "requires multiple tested configurations and sufficient trades"},
-        "walk_forward": {"status": "not_passed" if not enough else "implemented_not_passed", "test_fraction": "0.30"},
+        "deflated_metric": deflated_sharpe(values, trials=1) if enough else {"status": "insufficient_evidence", "reason": "requires sufficient realized trades"},
+        "walk_forward": {"status": "not_passed" if not enough else "implemented_not_passed", "test_fraction": "0.30", "folds": len(folds)},
         "confidence_interval": {"wins": wins, "trials": trade_count, "wilson_lower_win_rate": str(lower), "positive_lower_bound": bool(enough and lower > Decimal("0.5"))},
-        "random_control": {"status": "not_passed" if not enough else "implemented_not_passed", "reason": "matched random-entry replay is required before promotion"},
+        "random_control": {"status": "not_passed" if not enough else "implemented_not_passed", "strategy_mean": str(sum(values, Decimal("0")) / Decimal(trade_count)) if values else None, "control_mean": str(sum(control, Decimal("0")) / Decimal(len(control))) if control else None},
         "multi_symbol_window": {"status": "not_passed", "reason": "requires independent symbol and window datasets"},
     }
