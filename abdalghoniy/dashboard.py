@@ -21,6 +21,7 @@ from .liquidations import PublicLiquidationHeatmapClient
 from .market_data import MarketDataCache, PublicBitgetMarketData
 from .market_depth import OrderBookAggregator
 from .multi_exchange import PublicBybitClient, PublicHyperliquidClient, PublicMexcClient, SourceResult, SourceRouter
+from .runtime_safety import RuntimeSafetyStore
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB_ROOT = ROOT / 'web'
@@ -58,13 +59,15 @@ def make_status(root: Path = ROOT) -> dict:
             }
         except json.JSONDecodeError:
             tests = raw_marker or 'unknown'
+    runtime = RuntimeSafetyStore(root / '.runtime_safety.json').read()
+    runtime_payload = ({'armed': runtime.armed, 'halted': runtime.halted, 'halt_reason': runtime.halt_reason, 'data_age_ms': runtime.data_age_ms, 'last_reconciliation_ms': runtime.last_reconciliation_ms, 'rate_limit_breaker': runtime.rate_limit_breaker, 'runtime_state_available': True, 'source': 'runtime_safety_store'} if runtime else {'armed': None, 'halted': None, 'runtime_state_available': False, 'source': 'runtime_state_unavailable'})
     return {
         'service': 'ABDALGHONIY',
         'mode': 'paper',
         'live_orders_enabled': False,
         'timestamp_note': 'Server timestamps are UTC; UI displays Asia/Jakarta',
         'tests': tests,
-        'kill_switch': {'armed': None, 'halted': None, 'runtime_state_available': False, 'source': 'static_paper_build_policy', 'partition_tolerant': True, 'protective_orders_preserved': True},
+        'kill_switch': {**runtime_payload, 'partition_tolerant': True, 'protective_orders_preserved': True},
         'verification': verification,
         'risk': {'hard_stop_required': True, 'daily_loss_breaker': True, 'max_leverage': 3, 'max_drawdown': '2%'},
         'validation': [

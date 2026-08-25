@@ -52,7 +52,7 @@ class EndpointGuard:
             self._cooldown_until[key] = self.clock_ms() + self.cooldown_ms
 
 
-GLOBAL_ENDPOINT_GUARD = EndpointGuard(max_requests=10, window_ms=1000)
+GLOBAL_ENDPOINT_GUARD = EndpointGuard(max_requests=10, window_ms=1000, cooldown_ms=60_000)
 
 
 @dataclass(frozen=True)
