@@ -26,6 +26,13 @@ class CounterTrendConfig:
     max_funding_abs_bps: Decimal = Decimal("20")
 
 
+@dataclass(frozen=True)
+class OrderflowReplayConfig:
+    stop_distance_bps: Decimal = Decimal('10')
+    target_distance_bps: Decimal = Decimal('20')
+    max_hold: int = 5
+
+
 def counter_trend_signal(candles: Sequence[Candle], cvd_change: Decimal, config: CounterTrendConfig, funding_bps: Decimal = Decimal("0")) -> Optional[str]:
     if len(candles) < 2 or abs(funding_bps) > config.max_funding_abs_bps:
         return None
@@ -56,3 +63,20 @@ def mean_reversion_signal(price: Decimal, mean: Decimal, atr: Decimal, rsi: Deci
     if price <= mean - band_atr * atr and rsi <= Decimal("30"):
         return "long"
     return None
+
+
+def orderflow_signal(candles: Sequence[Candle], cvd_change: Decimal, config: OrderflowReplayConfig = OrderflowReplayConfig()) -> Optional[str]:
+    """Thin adapter so orderflow evaluation can sit behind the same signal interface.
+
+    Input candles are the intraday series; CVD change is the latest delta. The auction
+    evaluation needs at least a few bars to assess environment/location/confirmation.
+    """
+    from .orderflow import evaluate_orderflow
+    if len(candles) < 4:
+        return None
+    daily = [__import__('abdalghoniy.analytics', fromlist=['DailyCandle']).DailyCandle(
+        '2024-01-01', c.open, max(c.open, c.close, c.high), min(c.open, c.close, c.low), c.close, c.volume
+    ) for c in candles]
+    cvd_series = [Decimal('0')] * (len(candles) - 1) + [cvd_change]
+    state = evaluate_orderflow(daily, cvd_series)
+    return state.side

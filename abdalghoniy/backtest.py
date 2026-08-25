@@ -3,7 +3,9 @@ from decimal import Decimal
 from typing import Iterable, List, Optional
 
 from .fees import CostModel, net_pnl
-from .strategies import Candle, CounterTrendConfig, counter_trend_signal
+from .strategies import (
+    Candle, CounterTrendConfig, OrderflowReplayConfig, counter_trend_signal, orderflow_signal,
+)
 
 
 @dataclass(frozen=True)
@@ -107,5 +109,53 @@ def replay_counter_trend(candles: Iterable[Candle], cvd_changes: Iterable[Decima
         funding_cash = -notional * funding[i] / Decimal('10000') if direction == 'long' else notional * funding[i] / Decimal('10000')
         pnl = net_pnl(notional, quantity, entry, exit_price, direction, model, funding=funding_cash)
         trades.append(Trade(direction, entry, exit_price, quantity, pnl.net, held, funding_cash))
+        next_entry = i + held + 1
+    return trades
+
+
+def replay_orderflow(candles, cvd_changes, model, config=None, *, max_position_notional=None, max_hold=None):
+    config = config or OrderflowReplayConfig()
+    hold = max_hold or config.max_hold
+    bars = list(candles)
+    cvds = list(cvd_changes)
+    if len(cvds) != len(bars):
+        raise ValueError('market features must align with candles')
+    trades: List[Trade] = []
+    next_entry = 0
+    for i in range(len(bars) - 1):
+        if i < next_entry:
+            continue
+        side = orderflow_signal(bars[:i+1], cvds[i])
+        if not side:
+            continue
+        entry = bars[i].close
+        stop_dist = entry * config.stop_distance_bps / Decimal('10000')
+        target_dist = entry * config.target_distance_bps / Decimal('10000')
+        stop = entry - stop_dist if side == 'long' else entry + stop_dist
+        target = entry + target_dist if side == 'long' else entry - target_dist
+        end = min(i + hold, len(bars) - 1)
+        exit_price, held = bars[end].close, end - i
+        for j in range(i + 1, end + 1):
+            bar = bars[j]
+            if side == 'long':
+                if bar.low <= stop:
+                    exit_price, held = stop, j - i
+                    break
+                if bar.high >= target:
+                    exit_price, held = target, j - i
+                    break
+            else:
+                if bar.high >= stop:
+                    exit_price, held = stop, j - i
+                    break
+                if bar.low <= target:
+                    exit_price, held = target, j - i
+                    break
+        quantity = Decimal('1') if max_position_notional is None else min(Decimal('1'), max_position_notional / entry)
+        if quantity <= 0:
+            continue
+        notional = entry * quantity
+        pnl = net_pnl(notional, quantity, entry, exit_price, side, model)
+        trades.append(Trade(side, entry, exit_price, quantity, pnl.net, held))
         next_entry = i + held + 1
     return trades
