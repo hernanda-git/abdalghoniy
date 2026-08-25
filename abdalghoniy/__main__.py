@@ -6,13 +6,13 @@ from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .backtest import counter_trend_diagnostics, replay_counter_trend
+from .backtest import counter_trend_diagnostics, replay_counter_trend, replay_orderflow
 from .config import AppConfig
 from .data import fetch_demo_candles, fetch_feature_complete_dataset, load_csv
 from .dashboard import make_status
 from .fees import CostModel
 from .ledger import DurableLedger
-from .strategies import CounterTrendConfig
+from .strategies import CounterTrendConfig, OrderflowReplayConfig
 from .validation import evaluate_replay
 from .shadow import ShadowRunner
 from .live_shadow import LiveDemoShadow
@@ -42,18 +42,28 @@ def _replay(args, cfg: AppConfig) -> int:
         taker_fee=cfg.round_trip_fee_bps / Decimal("20000"),
         slippage_bps=cfg.slippage_bps,
     )
-    trades = replay_counter_trend(
-        dataset.candles,
-        dataset.cvd_changes,
-        cost,
-        CounterTrendConfig(),
-        stop_distance=Decimal(str(args.stop_distance)),
-        target_distance=Decimal(str(args.target_distance)),
-        max_hold=args.max_hold,
-        funding_bps=dataset.funding_bps,
-        max_position_notional=cfg.max_position_notional,
-    )
-    diagnostics = counter_trend_diagnostics(dataset.candles, dataset.cvd_changes, CounterTrendConfig(), dataset.funding_bps)
+    if args.strategy == "orderflow":
+        trades = replay_orderflow(
+            dataset.candles,
+            dataset.cvd_changes,
+            cost,
+            OrderflowReplayConfig(Decimal(str(args.stop_distance)), Decimal(str(args.target_distance)), args.max_hold),
+            max_position_notional=cfg.max_position_notional,
+        )
+        diagnostics = {"strategy": "orderflow", "cvd_nonzero": sum(1 for v in dataset.cvd_changes if v != 0)}
+    else:
+        trades = replay_counter_trend(
+            dataset.candles,
+            dataset.cvd_changes,
+            cost,
+            CounterTrendConfig(),
+            stop_distance=Decimal(str(args.stop_distance)),
+            target_distance=Decimal(str(args.target_distance)),
+            max_hold=args.max_hold,
+            funding_bps=dataset.funding_bps,
+            max_position_notional=cfg.max_position_notional,
+        )
+        diagnostics = counter_trend_diagnostics(dataset.candles, dataset.cvd_changes, CounterTrendConfig(), dataset.funding_bps)
     gross = sum(((t.entry - t.exit) * t.quantity if t.direction == "short" else (t.exit - t.entry) * t.quantity for t in trades), Decimal("0"))
     net = sum((t.net for t in trades), Decimal("0"))
     funding_total = sum((t.funding for t in trades), Decimal("0"))
@@ -149,6 +159,7 @@ def main(argv=None) -> int:
     replay.add_argument("--interval", required=True)
     replay.add_argument("--input", type=Path, default=None, help="existing CSV; omitted fetches public Bitget SUSDT-FUTURES demo candles")
     replay.add_argument("--output-dir", type=Path, default=Path("reports/latest"))
+    replay.add_argument("--strategy", default="counter_trend", choices=["counter_trend", "orderflow"])
     replay.add_argument("--stop-distance", default="1")
     replay.add_argument("--target-distance", default="2")
     replay.add_argument("--max-hold", type=int, default=5)
