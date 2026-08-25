@@ -1,0 +1,545 @@
+{
+  "generated_at": "2026-08-25T16:27:54.163883+00:00",
+  "engine": "abdalghoniy (paper-only, no live orders)",
+  "honesty_notice": "No live orders were placed. No profitability is claimed. Demo candle datasets carry zero CVD/funding, so strategies that require CVD confirmation produce 0 trades by design. Synthetic stress results are a pipeline smoke test, NOT a profitability claim.",
+  "acquired_datasets": {
+    "requested": [
+      "BTCUSDT",
+      "ETHUSDT",
+      "SOLUSDT",
+      "XRPUSDT",
+      "DOGEUSDT"
+    ],
+    "count_acquired": 3,
+    "count_requested": 5,
+    "details": [
+      {
+        "symbol": "BTCUSDT",
+        "ok": true,
+        "candles": 1000,
+        "path": "/root/abdalghoniy/data/btcusdt_1m.csv",
+        "attempts": 1
+      },
+      {
+        "symbol": "ETHUSDT",
+        "ok": true,
+        "candles": 1000,
+        "path": "/root/abdalghoniy/data/ethusdt_1m.csv",
+        "attempts": 1
+      },
+      {
+        "symbol": "SOLUSDT",
+        "ok": false,
+        "candles": 0,
+        "path": null,
+        "error": "HTTP Error 400: Bad Request",
+        "reason": "symbol_not_listed_in_SUSDT_FUTURES_demo_venue",
+        "retryable": false
+      },
+      {
+        "symbol": "XRPUSDT",
+        "ok": true,
+        "candles": 1000,
+        "path": "/root/abdalghoniy/data/xrpusdt_1m.csv",
+        "attempts": 1
+      },
+      {
+        "symbol": "DOGEUSDT",
+        "ok": false,
+        "candles": 0,
+        "path": null,
+        "error": "HTTP Error 400: Bad Request",
+        "reason": "symbol_not_listed_in_SUSDT_FUTURES_demo_venue",
+        "retryable": false
+      }
+    ],
+    "venue": "Bitget SUSDT-FUTURES (public demo, paper-only)",
+    "venue_available_contracts": [
+      "SBTCSUSDT",
+      "SETHSUSDT",
+      "SXRPSUSDT"
+    ],
+    "venue_note": "SOLUSDT and DOGEUSDT returned HTTP 400 (Bad Request) because those symbols are NOT listed on the public SUSDT-FUTURES demo venue at all (only 3 contracts exist: SBTCSUSDT, SETHSUSDT, SXRPSUSDT). This is a genuine data-availability limit, not a rate limit and not an engine bug. It also caps independent multi-symbol evidence to at most 3 symbols on this venue."
+  },
+  "per_dataset": [
+    {
+      "symbol": "BTCUSDT",
+      "candles": 1000,
+      "strategies": {
+        "orderflow": {
+          "ok": true,
+          "trade_count": 0,
+          "gross_pnl": "0",
+          "fees_slippage": "0",
+          "funding": "0",
+          "net_pnl": "0",
+          "expectancy": null,
+          "validation": {
+            "status": "insufficient_evidence",
+            "trade_count": 0,
+            "mean_return": null,
+            "purged_cv": {
+              "status": "not_passed",
+              "folds": 5,
+              "purge": 1,
+              "embargo": 1
+            },
+            "deflated_metric": {
+              "status": "insufficient_evidence",
+              "reason": "requires sufficient realized trades"
+            },
+            "walk_forward": {
+              "status": "not_passed",
+              "test_fraction": "0.30",
+              "folds": 0
+            },
+            "confidence_interval": {
+              "wins": 0,
+              "trials": 0,
+              "wilson_lower_win_rate": "0",
+              "positive_lower_bound": false
+            },
+            "random_control": {
+              "status": "not_passed",
+              "strategy_mean": null,
+              "control_mean": null
+            },
+            "multi_symbol_window": {
+              "status": "not_passed",
+              "reason": "requires independent symbol and window datasets"
+            }
+          },
+          "cvd_nonzero_count": 0
+        },
+        "counter_trend": {
+          "ok": true,
+          "trade_count": 0,
+          "gross_pnl": "0",
+          "fees_slippage": "0",
+          "funding": "0",
+          "net_pnl": "0",
+          "expectancy": null,
+          "validation": {
+            "status": "insufficient_evidence",
+            "trade_count": 0,
+            "mean_return": null,
+            "purged_cv": {
+              "status": "not_passed",
+              "folds": 5,
+              "purge": 1,
+              "embargo": 1
+            },
+            "deflated_metric": {
+              "status": "insufficient_evidence",
+              "reason": "requires sufficient realized trades"
+            },
+            "walk_forward": {
+              "status": "not_passed",
+              "test_fraction": "0.30",
+              "folds": 0
+            },
+            "confidence_interval": {
+              "wins": 0,
+              "trials": 0,
+              "wilson_lower_win_rate": "0",
+              "positive_lower_bound": false
+            },
+            "random_control": {
+              "status": "not_passed",
+              "strategy_mean": null,
+              "control_mean": null
+            },
+            "multi_symbol_window": {
+              "status": "not_passed",
+              "reason": "requires independent symbol and window datasets"
+            }
+          },
+          "cvd_nonzero_count": 0
+        }
+      }
+    },
+    {
+      "symbol": "ETHUSDT",
+      "candles": 1000,
+      "strategies": {
+        "orderflow": {
+          "ok": true,
+          "trade_count": 0,
+          "gross_pnl": "0",
+          "fees_slippage": "0",
+          "funding": "0",
+          "net_pnl": "0",
+          "expectancy": null,
+          "validation": {
+            "status": "insufficient_evidence",
+            "trade_count": 0,
+            "mean_return": null,
+            "purged_cv": {
+              "status": "not_passed",
+              "folds": 5,
+              "purge": 1,
+              "embargo": 1
+            },
+            "deflated_metric": {
+              "status": "insufficient_evidence",
+              "reason": "requires sufficient realized trades"
+            },
+            "walk_forward": {
+              "status": "not_passed",
+              "test_fraction": "0.30",
+              "folds": 0
+            },
+            "confidence_interval": {
+              "wins": 0,
+              "trials": 0,
+              "wilson_lower_win_rate": "0",
+              "positive_lower_bound": false
+            },
+            "random_control": {
+              "status": "not_passed",
+              "strategy_mean": null,
+              "control_mean": null
+            },
+            "multi_symbol_window": {
+              "status": "not_passed",
+              "reason": "requires independent symbol and window datasets"
+            }
+          },
+          "cvd_nonzero_count": 0
+        },
+        "counter_trend": {
+          "ok": true,
+          "trade_count": 0,
+          "gross_pnl": "0",
+          "fees_slippage": "0",
+          "funding": "0",
+          "net_pnl": "0",
+          "expectancy": null,
+          "validation": {
+            "status": "insufficient_evidence",
+            "trade_count": 0,
+            "mean_return": null,
+            "purged_cv": {
+              "status": "not_passed",
+              "folds": 5,
+              "purge": 1,
+              "embargo": 1
+            },
+            "deflated_metric": {
+              "status": "insufficient_evidence",
+              "reason": "requires sufficient realized trades"
+            },
+            "walk_forward": {
+              "status": "not_passed",
+              "test_fraction": "0.30",
+              "folds": 0
+            },
+            "confidence_interval": {
+              "wins": 0,
+              "trials": 0,
+              "wilson_lower_win_rate": "0",
+              "positive_lower_bound": false
+            },
+            "random_control": {
+              "status": "not_passed",
+              "strategy_mean": null,
+              "control_mean": null
+            },
+            "multi_symbol_window": {
+              "status": "not_passed",
+              "reason": "requires independent symbol and window datasets"
+            }
+          },
+          "cvd_nonzero_count": 0
+        }
+      }
+    },
+    {
+      "symbol": "SOLUSDT",
+      "acquired": false,
+      "error": "HTTP Error 400: Bad Request"
+    },
+    {
+      "symbol": "XRPUSDT",
+      "candles": 1000,
+      "strategies": {
+        "orderflow": {
+          "ok": true,
+          "trade_count": 0,
+          "gross_pnl": "0",
+          "fees_slippage": "0",
+          "funding": "0",
+          "net_pnl": "0",
+          "expectancy": null,
+          "validation": {
+            "status": "insufficient_evidence",
+            "trade_count": 0,
+            "mean_return": null,
+            "purged_cv": {
+              "status": "not_passed",
+              "folds": 5,
+              "purge": 1,
+              "embargo": 1
+            },
+            "deflated_metric": {
+              "status": "insufficient_evidence",
+              "reason": "requires sufficient realized trades"
+            },
+            "walk_forward": {
+              "status": "not_passed",
+              "test_fraction": "0.30",
+              "folds": 0
+            },
+            "confidence_interval": {
+              "wins": 0,
+              "trials": 0,
+              "wilson_lower_win_rate": "0",
+              "positive_lower_bound": false
+            },
+            "random_control": {
+              "status": "not_passed",
+              "strategy_mean": null,
+              "control_mean": null
+            },
+            "multi_symbol_window": {
+              "status": "not_passed",
+              "reason": "requires independent symbol and window datasets"
+            }
+          },
+          "cvd_nonzero_count": 0
+        },
+        "counter_trend": {
+          "ok": true,
+          "trade_count": 0,
+          "gross_pnl": "0",
+          "fees_slippage": "0",
+          "funding": "0",
+          "net_pnl": "0",
+          "expectancy": null,
+          "validation": {
+            "status": "insufficient_evidence",
+            "trade_count": 0,
+            "mean_return": null,
+            "purged_cv": {
+              "status": "not_passed",
+              "folds": 5,
+              "purge": 1,
+              "embargo": 1
+            },
+            "deflated_metric": {
+              "status": "insufficient_evidence",
+              "reason": "requires sufficient realized trades"
+            },
+            "walk_forward": {
+              "status": "not_passed",
+              "test_fraction": "0.30",
+              "folds": 0
+            },
+            "confidence_interval": {
+              "wins": 0,
+              "trials": 0,
+              "wilson_lower_win_rate": "0",
+              "positive_lower_bound": false
+            },
+            "random_control": {
+              "status": "not_passed",
+              "strategy_mean": null,
+              "control_mean": null
+            },
+            "multi_symbol_window": {
+              "status": "not_passed",
+              "reason": "requires independent symbol and window datasets"
+            }
+          },
+          "cvd_nonzero_count": 0
+        }
+      }
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "acquired": false,
+      "error": "HTTP Error 400: Bad Request"
+    }
+  ],
+  "synthetic_stress": {
+    "purpose": "SMOKE TEST ONLY - pipeline executes end-to-end with synthetic CVD/funding. NOT a profitability claim.",
+    "walks": [
+      {
+        "walk_seed": 101,
+        "bars": 1000,
+        "orderflow": {
+          "trade_count": 23,
+          "net_pnl": "-1.1507130660",
+          "expectancy": "-0.05003100286956521739130434783"
+        },
+        "counter_trend": {
+          "trade_count": 58,
+          "net_pnl": "3.974368017608309601458233231",
+          "expectancy": "0.06852358651048809657686609019"
+        }
+      },
+      {
+        "walk_seed": 202,
+        "bars": 1000,
+        "orderflow": {
+          "trade_count": 24,
+          "net_pnl": "-2.7423153180",
+          "expectancy": "-0.11426313825"
+        },
+        "counter_trend": {
+          "trade_count": 45,
+          "net_pnl": "-5.83632407205912120955695087",
+          "expectancy": "-0.1296960904902026935457100193"
+        }
+      },
+      {
+        "walk_seed": 303,
+        "bars": 1000,
+        "orderflow": {
+          "trade_count": 23,
+          "net_pnl": "-3.1564279400",
+          "expectancy": "-0.1372359973913043478260869565"
+        },
+        "counter_trend": {
+          "trade_count": 48,
+          "net_pnl": "1.731623801331244554214347017",
+          "expectancy": "0.03607549586106759487946556285"
+        }
+      }
+    ]
+  },
+  "real_feature_sanity": {
+    "dataset": "/root/abdalghoniy/data/sbtcsusdt_1m_feature_complete_1000.csv",
+    "strategies": {
+      "orderflow": {
+        "ok": true,
+        "trade_count": 6,
+        "gross_pnl": "-0.003000000000000000000000000000",
+        "fees_slippage": "0.06000000000000000000000000000",
+        "funding": "0",
+        "net_pnl": "-0.06300000000000000000000000000",
+        "expectancy": "-0.01050000000000000000000000000",
+        "validation": {
+          "status": "insufficient_evidence",
+          "trade_count": 6,
+          "mean_return": "-0.01050000000000000000000000000",
+          "purged_cv": {
+            "status": "not_passed",
+            "folds": 5,
+            "purge": 1,
+            "embargo": 1
+          },
+          "deflated_metric": {
+            "status": "insufficient_evidence",
+            "reason": "requires sufficient realized trades"
+          },
+          "walk_forward": {
+            "status": "not_passed",
+            "test_fraction": "0.30",
+            "folds": 0
+          },
+          "confidence_interval": {
+            "wins": 0,
+            "trials": 6,
+            "wilson_lower_win_rate": "0.0",
+            "positive_lower_bound": false
+          },
+          "random_control": {
+            "status": "not_passed",
+            "strategy_mean": "-0.01050000000000000000000000000",
+            "control_mean": "-0.006833333333333333333333333333"
+          },
+          "multi_symbol_window": {
+            "status": "not_passed",
+            "reason": "requires independent symbol and window datasets"
+          }
+        },
+        "cvd_nonzero_count": 1000
+      },
+      "counter_trend": {
+        "ok": true,
+        "trade_count": 0,
+        "gross_pnl": "0",
+        "fees_slippage": "0",
+        "funding": "0",
+        "net_pnl": "0",
+        "expectancy": null,
+        "validation": {
+          "status": "insufficient_evidence",
+          "trade_count": 0,
+          "mean_return": null,
+          "purged_cv": {
+            "status": "not_passed",
+            "folds": 5,
+            "purge": 1,
+            "embargo": 1
+          },
+          "deflated_metric": {
+            "status": "insufficient_evidence",
+            "reason": "requires sufficient realized trades"
+          },
+          "walk_forward": {
+            "status": "not_passed",
+            "test_fraction": "0.30",
+            "folds": 0
+          },
+          "confidence_interval": {
+            "wins": 0,
+            "trials": 0,
+            "wilson_lower_win_rate": "0",
+            "positive_lower_bound": false
+          },
+          "random_control": {
+            "status": "not_passed",
+            "strategy_mean": null,
+            "control_mean": null
+          },
+          "multi_symbol_window": {
+            "status": "not_passed",
+            "reason": "requires independent symbol and window datasets"
+          }
+        },
+        "cvd_nonzero_count": 1000
+      }
+    }
+  },
+  "gate_status": {
+    "logic_review": {
+      "status": "not_passed",
+      "implemented": true,
+      "detail": "manual logic/lookahead review gate; never auto-passed in this campaign"
+    },
+    "purged_cv": {
+      "status": "not_passed",
+      "implemented": true,
+      "detail": "purged_splits() is implemented but requires >=30 realized trades; all datasets produced <30 (often 0) on demo candles with zero CVD"
+    },
+    "deflated_metric": {
+      "status": "not_passed",
+      "implemented": true,
+      "detail": "deflated_sharpe() implemented; requires sufficient realized trades; not met"
+    },
+    "walk_forward": {
+      "status": "not_passed",
+      "implemented": true,
+      "detail": "walk_forward() implemented; requires >=30 trades; not met"
+    },
+    "shadow": {
+      "status": "implemented_not_run",
+      "implemented": true,
+      "detail": "ShadowRunner / live-shadow exist (paper-only, no order path); not executed in this campaign"
+    },
+    "micro_live": {
+      "status": "blocked_by_design",
+      "implemented": false,
+      "detail": "paper-only build exposes NO live order path; micro-live promotion is intentionally blocked"
+    }
+  },
+  "summary": {
+    "total_real_trades_on_demo": 0,
+    "no_live_orders": true,
+    "no_profitability_claim": true,
+    "note": "On demo candles (zero CVD/funding) both strategies produced 0 trades wherever CVD confirmation is required -- this is correct, by-design behaviour, not a bug. The pipeline itself runs cleanly end-to-end (verified by the synthetic stress smoke test and by the real-feature sanity replay where non-zero CVD engaged orderflow). SOLUSDT and DOGEUSDT could not be acquired because the public SUSDT-FUTURES demo venue lists only 3 contracts (BTC, ETH, XRP), which also limits independent multi-symbol promotion evidence to 3 symbols. Synthetic stress results are a pipeline smoke test only and are NOT a profitability claim. All promotion gates remain unmet due to insufficient realized-trade evidence (<30 trades).",
+    "venue_limited_to_3_symbols": true
+  }
+}
