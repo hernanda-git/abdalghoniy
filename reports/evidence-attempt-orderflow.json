@@ -1,0 +1,8 @@
+{
+  "windows": 3,
+  "trades": 12,
+  "net": -0.1647,
+  "deflated_sharpe": -2.6854,
+  "walk_forward_folds": 2,
+  "eligible": false
+}

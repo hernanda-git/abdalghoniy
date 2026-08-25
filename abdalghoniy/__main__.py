@@ -134,6 +134,36 @@ def _live_shadow(args) -> int:
     return 0
 
 
+def _demo_probe(args, cfg: AppConfig) -> int:
+    from .secrets import has_secrets, load_secrets
+    from .bitget import BitgetReadOnlyClient
+    from .micro_live import MicroLiveController
+    from .risk import DailyLossBreaker, HardStop
+    from .safety import KillSwitch, OrderBook, OrderIntent
+    if not has_secrets():
+        raise SystemExit("no demo credentials present; refusing probe")
+    secrets = load_secrets()
+    client = BitgetReadOnlyClient(secrets.api_key, secrets.api_secret, secrets.passphrase, product_type="SUSDT-FUTURES")
+    account = client.demo_account()
+    available = float(account[0].get("available", "0")) if account else 0.0
+    positions = client.demo_positions()
+    payload = {"product": "SUSDT-FUTURES", "demo_available_susdt": available, "open_positions": len(positions), "order_path_used": False}
+    if args.allow_microlive:
+        from .promotion import PromotionRegistry
+        controller = MicroLiveController(args.promotion_path)
+        ks = KillSwitch(OrderBook([OrderIntent("stop1", "SBTCSUSDT", reduce_only=True, protective=True)]))
+        ks.arm()
+        result = controller.attempt_order(
+            user_authorized=True, kill_switch=ks, hard_stop=HardStop.for_entry("long", Decimal("100"), Decimal("1")),
+            daily_breaker=DailyLossBreaker(Decimal("3000"), Decimal("90")), symbol="SBTCSUSDT", direction="long",
+            entry=Decimal("1"), notional=cfg.max_position_notional, adverse_move_bps=Decimal("10"),
+            place_fn=lambda **kwargs: "STUB_NO_NETWORK",
+        )
+        payload["microlive_attempt"] = {"allowed": result.allowed, "reason": result.reason}
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def _feature_dataset(args) -> int:
     path = fetch_feature_complete_dataset(args.symbol, args.interval, args.limit, args.output)
     dataset = load_csv(path)
@@ -175,6 +205,9 @@ def main(argv=None) -> int:
     live_shadow.add_argument("--event-path", type=Path, required=True)
     live_shadow.add_argument("--iterations", type=int, default=1)
     live_shadow.add_argument("--sleep", type=float, default=1.0)
+    demo_probe = sub.add_parser("demo-probe", help="signed read-only demo account probe (NO orders)")
+    demo_probe.add_argument("--promotion-path", type=Path, default=Path("reports/promotion-orderflow.json"))
+    demo_probe.add_argument("--allow-microlive", action="store_true", help="attempt a gated tiny capped demo order (refuses unless ladder passed)")
     feature_dataset = sub.add_parser("feature-dataset", help="build a dataset with public fill CVD and historical funding")
     feature_dataset.add_argument("--symbol", required=True)
     feature_dataset.add_argument("--interval", default="1m")
@@ -190,6 +223,8 @@ def main(argv=None) -> int:
         return _shadow(args)
     if args.command == "live-shadow":
         return _live_shadow(args)
+    if args.command == "demo-probe":
+        return _demo_probe(args, cfg)
     if args.command == "feature-dataset":
         return _feature_dataset(args)
     if args.status:

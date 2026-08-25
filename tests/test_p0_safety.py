@@ -54,11 +54,13 @@ def test_net_pnl_subtracts_fee_slippage_and_funding():
 
 
 def test_secrets_are_loaded_only_from_environment(monkeypatch):
-    monkeypatch.setenv("ABD_EXCHANGE_API_KEY", "key-value")
-    monkeypatch.setenv("ABD_EXCHANGE_API_SECRET", "secret-value")
+    monkeypatch.setenv("BITGET_API_KEY", "key-value")
+    monkeypatch.setenv("BITGET_API_SECRET", "secret-value")
+    monkeypatch.setenv("BITGET_PASSPHRASE", "pass-value")
     secrets = load_secrets()
     assert secrets.api_key == "key-value"
     assert secrets.api_secret == "secret-value"
+    assert secrets.passphrase == "pass-value"
 
 
 def test_config_defaults_are_paper_and_capped():

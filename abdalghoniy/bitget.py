@@ -62,9 +62,10 @@ class BitgetReadOnlyClient:
     def _get(self, path: str, params: dict[str, str], signed: bool = False):
         query = urllib.parse.urlencode(params)
         request_path = f"{path}?{query}"
-        payload = self.transport("GET", self.base_url + request_path, headers=self._headers("GET", request_path) if signed else {}, body=None)
+        headers = self._headers("GET", request_path) if (signed and self.api_key and self.api_secret and self.passphrase) else {}
+        payload = self.transport("GET", self.base_url + request_path, headers=headers, body=None)
         if payload.get("code") != "00000":
-            raise RuntimeError(f"Bitget read-only request failed: {payload.get('code')}")
+            raise RuntimeError(f"Bitget read-only request failed: {payload.get('code')} {payload.get('msg')}")
         return payload.get("data") or []
 
     def contract(self, symbol: str) -> dict:

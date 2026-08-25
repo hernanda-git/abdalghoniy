@@ -1,0 +1,112 @@
+{
+  "symbol": "sbtcsusdt_1m_feature_complete_1000",
+  "interval": "1m",
+  "dataset": "/root/abdalghoniy/data/sbtcsusdt_1m_feature_complete_1000.csv",
+  "dataset_hash": "cd4edd6245a8dc9954624809b73744b332fd24986ca7a9e0da8d74fa92393dce",
+  "code_hash": "921b2efc1b1de0587dca3ef3eeb8e5970a47255411f5649a92eccaf6408674f8",
+  "config_hash": "e7442e681cb2dcb9b7c68c151b605edf1b720cbf9ea94be36d2e3bb3a15e89d3",
+  "evaluated_at": "2026-08-25T23:27:53.986109+07:00",
+  "candle_count": 1000,
+  "trade_count": 6,
+  "gross_pnl": "-0.003000000000000000000000000000",
+  "fees_slippage": "0.06000000000000000000000000000",
+  "funding": "0",
+  "net_pnl": "-0.06300000000000000000000000000",
+  "expectancy": "-0.01050000000000000000000000000",
+  "diagnostics": {
+    "strategy": "orderflow",
+    "cvd_nonzero": 1000
+  },
+  "trades": [
+    {
+      "direction": "long",
+      "entry": "77711",
+      "exit": "77703.2289",
+      "quantity": "0.0001286819111837449009792693441",
+      "net": "-0.01100000000000000000000000000",
+      "funding": "0",
+      "bars_held": 1
+    },
+    {
+      "direction": "long",
+      "entry": "77467",
+      "exit": "77482.4934",
+      "quantity": "0.0001290872242374172228174577562",
+      "net": "-0.008000000000000000000000000000",
+      "funding": "0",
+      "bars_held": 1
+    },
+    {
+      "direction": "short",
+      "entry": "77080.5",
+      "exit": "77088.20805",
+      "quantity": "0.0001297344983491285085073397292",
+      "net": "-0.01100000000000000000000000000",
+      "funding": "0",
+      "bars_held": 1
+    },
+    {
+      "direction": "short",
+      "entry": "76919",
+      "exit": "76926.6919",
+      "quantity": "0.0001300068903651893550358168983",
+      "net": "-0.01100000000000000000000000000",
+      "funding": "0",
+      "bars_held": 1
+    },
+    {
+      "direction": "long",
+      "entry": "77316",
+      "exit": "77308.2684",
+      "quantity": "0.0001293393346784624139893424388",
+      "net": "-0.01100000000000000000000000000",
+      "funding": "0",
+      "bars_held": 1
+    },
+    {
+      "direction": "long",
+      "entry": "77621",
+      "exit": "77613.2379",
+      "quantity": "0.0001288311152909650738846446194",
+      "net": "-0.01100000000000000000000000000",
+      "funding": "0",
+      "bars_held": 1
+    }
+  ],
+  "validation": {
+    "status": "insufficient_evidence",
+    "trade_count": 6,
+    "mean_return": "-0.01050000000000000000000000000",
+    "purged_cv": {
+      "status": "not_passed",
+      "folds": 5,
+      "purge": 1,
+      "embargo": 1
+    },
+    "deflated_metric": {
+      "status": "insufficient_evidence",
+      "reason": "requires sufficient realized trades"
+    },
+    "walk_forward": {
+      "status": "not_passed",
+      "test_fraction": "0.30",
+      "folds": 0
+    },
+    "confidence_interval": {
+      "wins": 0,
+      "trials": 6,
+      "wilson_lower_win_rate": "0.0",
+      "positive_lower_bound": false
+    },
+    "random_control": {
+      "status": "not_passed",
+      "strategy_mean": "-0.01050000000000000000000000000",
+      "control_mean": "-0.006833333333333333333333333333"
+    },
+    "multi_symbol_window": {
+      "status": "not_passed",
+      "reason": "requires independent symbol and window datasets"
+    }
+  },
+  "ledger_path": "/root/abdalghoniy/reports/per_dataset/sbtcsusdt_1m_feature_complete_1000/orderflow/ledger.sqlite3"
+}
