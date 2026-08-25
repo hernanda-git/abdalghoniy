@@ -1,6 +1,6 @@
 mode: paper
 max_leverage: 3
-max_drawdown: 0.02
-round_trip_fee_bps: 10
+max_drawdown: 0.03
+round_trip_fee_bps: 8
 slippage_bps: 2
-max_position_notional: 1000
+max_position_notional: 10
